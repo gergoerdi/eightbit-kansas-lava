@@ -61,20 +61,15 @@ unlinesPETSCII = BS.concat . map (extendTo 40)
 main :: IO ()
 main = do
     font <- BS.readFile "characters-1.901447-08.bin"
-    let text = unlinesPETSCII . map (BS.map toPETSCII) $
-               [ "*** COMMODORE BASIC ***"
-               , ""
-               , " 7167 BYTES FREE"
-               , ""
-               , "READY."
-               ]
+    kernal <- BS.readFile "image/FillScreen.obj"
+    basic <- return ""
 
     createDirectoryIfMissing True "ise"
     setCurrentDirectory "ise"
     shakeArgsWith shakeOptions flags $ \flags targets -> do
         (xilinxConfig, model) <- mkXilinxConfig flags
 
-        (vhdl, ucf) <- synthesize model modName (Board.board font text)
+        (vhdl, ucf) <- synthesize model modName (Board.board font kernal basic)
         return $ Just $ do
             want $ if null targets then [modName <.> "bit"] else targets
 
