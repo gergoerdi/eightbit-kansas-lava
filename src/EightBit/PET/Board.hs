@@ -19,8 +19,8 @@ import Data.Bits
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 
-loadFont :: BS.ByteString -> (Byte -> Matrix X8 Byte)
-loadFont font addr = Matrix.fromList . map fromIntegral . BS.unpack . BS.take 8 . BS.drop (fromIntegral addr * 8) $ font
+loadFont :: BS.ByteString -> U11 -> Byte
+loadFont font = fromIntegral . BS.index font . fromIntegral
 
 board :: ByteString -> ByteString -> ByteString -> Fabric ()
 board fontImage kernalImage basicImage = do
@@ -94,12 +94,14 @@ boardCircuit fontImage kernalImage basicImage = vga
               , (isMemory, mRead)
               ]
 
-    textFont = invertFont (textFontIdx `testABit` 7) $ rom (textFontIdx .&. 0x7f) (Just . loadFont fontImage)
-    -- textFont = invertFont (textFontIdx `testABit` 7) $ funMap (Just . loadFont fontImage) (textFontIdx .&. 0x7f)
+    fontAddr :: Signal clk U11
+    fontAddr = unsigned (textFontIdx .&. 0x7F) `shiftL` 3 + unsigned textFontRowIdx
+    textFontRow = invertFont (textFontIdx `testABit` 7) $
+                  rom fontAddr (Just . fromImage fontImage)
     textChar = syncRead vRAM textCharIdx
 
 invertFont :: (Clock clk)
-           => Signal clk Bool -> Signal clk (Matrix X8 Byte) -> Signal clk (Matrix X8 Byte)
-invertFont b = packMatrix . fmap (xor mask) . unpackMatrix
+           => Signal clk Bool -> Signal clk Byte -> Signal clk Byte
+invertFont b = xor mask
   where
     mask = mux b (0, 0xff)
