@@ -1,6 +1,6 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-module EightBit.PET.Board (board) where
+module EightBit.PET.Board (board, boardCircuit) where
 
 import MOS6502.Types
 import MOS6502.CPU
@@ -24,7 +24,7 @@ loadFont font = fromIntegral . BS.index font . fromIntegral
 
 board :: ByteString -> ByteString -> ByteString -> Fabric ()
 board fontImage kernalImage basicImage = do
-    vga . encodeVGA . vgaOut $ boardCircuit fontImage kernalImage basicImage
+    vga . encodeVGA . vgaOut . fst $ boardCircuit fontImage kernalImage basicImage
 
 fromImage :: (Integral a) => ByteString -> a -> Byte
 fromImage bs addr | addr' < BS.length bs = fromIntegral . BS.index bs $ addr'
@@ -42,22 +42,26 @@ boardCircuit :: forall clk. (Clock clk)
              => ByteString
              -> ByteString
              -> ByteString
-             -> VGADriverOut clk X6 X5 U4 U4 U4
-boardCircuit fontImage kernalImage basicImage = vga
+             -> (VGADriverOut clk X6 X5 U4 U4 U4,
+                 ((CPUIn clk, CPUOut clk, CPUDebug clk),
+                  Signal clk (Bool, Byte)))
+boardCircuit fontImage kernalImage basicImage = (vga, ((cpuIn, cpuOut, cpuDebug), pack (delay isKernal, kernalROM)))
   where
     (TextOut{..}, vga) = text40x25 (pureS maxBound) TextIn{..}
-    (CPUOut{..}, _cpuDebug) = cpu CPUIn{..}
+    cpuIn = CPUIn{..}
+    (cpuOut@CPUOut{..}, cpuDebug) = cpu cpuIn
 
     cpuIRQ = high
     cpuNMI = high
 
-    -- Slow down CPU 1024-fold
-    cpuWait = runRTL $ do
-        counter <- newReg (0 :: U10)
-        counter := reg counter + 1
-        return $ reg counter ./=. 0
+    -- Slow down CPU 50-fold
+    -- cpuWait = runRTL $ do
+    --     counter <- newReg (0 :: Byte)
+    --     counter := mux (reg counter .==. 50) (reg counter + 1, 0)
+    --     return $ reg counter ./=. 0
+    cpuWait = low
 
-    page = delay $ cpuMemA `shiftR` 12
+    page = cpuMemA `shiftR` 12
 
     vAddr :: Signal clk U10
     vAddr = unsigned cpuMemA
