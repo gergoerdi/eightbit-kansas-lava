@@ -36,7 +36,7 @@ memoryMapping :: (Clock clk, Rep a)
               => Signal clk a
               -> [(Signal clk Bool, Signal clk a)]
               -> Signal clk a
-memoryMapping = foldr (\(sel, v) sig -> mux sel (v, sig))
+memoryMapping = foldr (\(sel, v) sig -> mux (delay sel) (sig, v))
 
 boardCircuit :: forall clk. (Clock clk)
              => ByteString
