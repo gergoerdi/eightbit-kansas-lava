@@ -58,10 +58,16 @@ unlinesPETSCII = BS.concat . map (extendTo 40)
       where
         k = n - (BS.length bs `mod` n)
 
+loadKernal fileName = do
+    bs <- BS.readFile fileName
+    return $ bs <>
+      BS.replicate (16 * 256 - BS.length bs - 6) 0 <>
+      BS.pack [0x00, 0x00, 0x00, 0xF0, 0x00, 0x00] -- NMI, Reset, IRQ
+
 main :: IO ()
 main = do
     font <- BS.readFile "characters-1.901447-08.bin"
-    kernal <- BS.readFile "image/FillScreen.obj"
+    kernal <- loadKernal "image/hello.obj"
     basic <- return ""
 
     createDirectoryIfMissing True "ise"
