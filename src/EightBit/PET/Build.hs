@@ -70,7 +70,6 @@ main :: IO ()
 main = do
     font <- BS.readFile "characters-1.901447-08.bin"
     kernal <- loadKernal "image/hello.obj"
-    basic <- return ""
 
     print [BS.index kernal 0x0FFC, BS.index kernal 0x0FFD]
 
@@ -79,7 +78,7 @@ main = do
     shakeArgsWith shakeOptions flags $ \flags targets -> do
         (xilinxConfig, model) <- mkXilinxConfig flags
 
-        (vhdl, ucf) <- synthesize model modName (Machine.machine font kernal basic)
+        (vhdl, ucf) <- synthesize model modName (Machine.machine font kernal)
         return $ Just $ do
             want $ if null targets then [modName <.> "bit"] else targets
 

@@ -14,12 +14,12 @@ import Data.ByteString (ByteString)
 import Data.Sized.Unsigned
 import Data.Bits
 
-machine :: ByteString -> ByteString -> ByteString -> Fabric ()
-machine fontImage kernalImage basicImage = do
+machine :: ByteString -> ByteString -> Fabric ()
+machine fontImage kernalImage = do
     vga . encodeVGA . vgaOut $ video
   where
     (TextOut{..}, video) = text40x25 (pureS maxBound) TextIn{..}
-    (textRAM, _) = board kernalImage basicImage
+    (textRAM, _) = board kernalImage
 
     fontAddr :: Signal CLK U11
     fontAddr = unsigned (textFontIdx .&. 0x7F) `shiftL` 3 + unsigned textFontRowIdx

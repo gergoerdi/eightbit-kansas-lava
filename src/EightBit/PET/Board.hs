@@ -9,6 +9,7 @@ import Language.KansasLava
 import Language.KansasLava.Signal
 
 import Data.Sized.Unsigned
+import qualified Data.Sized.Matrix as Matrix
 import Control.Applicative
 import Data.Bits
 import Data.ByteString (ByteString)
@@ -30,9 +31,8 @@ forceDefined def = shallowMapS (fmap (optX . (<|> Just def) . unX))
 
 board :: forall clk. (Clock clk)
       => ByteString
-      -> ByteString
       -> (Signal clk (U10 -> Byte), (CPUIn clk, CPUOut clk, CPUDebug clk))
-board kernalImage basicImage = (vRAM, (cpuIn, cpuOut, cpuDebug))
+board kernalImage = (vRAM, (cpuIn, cpuOut, cpuDebug))
   where
     cpuIn = CPUIn{..}
     (cpuOut@CPUOut{..}, cpuDebug) = cpu cpuIn
@@ -53,7 +53,9 @@ board kernalImage basicImage = (vRAM, (cpuIn, cpuOut, cpuDebug))
     vAddr = unsigned cpuMemA
 
     isVideo = page .==. 0x8
-    vPipe = packEnabled (isEnabled cpuMemW .&&. isVideo) $
+    vPipe = forceDefined Nothing $
+            packEnabled (isEnabled cpuMemW .&&. isVideo) $
+            forceDefined (0, 0) $
             pack (vAddr, enabledVal cpuMemW)
     vRAM = writeMemory vPipe
     vRead = syncRead vRAM vAddr
@@ -61,26 +63,65 @@ board kernalImage basicImage = (vRAM, (cpuIn, cpuOut, cpuDebug))
     mAddr :: Signal clk U13
     mAddr = unsigned cpuMemA
 
-    isMemory = page .<=. 0x3
+    isMemory = page .<=. 0x1 -- 8K RAM
     mPipe = packEnabled (isEnabled cpuMemW .&&. isMemory) $
             pack (mAddr, enabledVal cpuMemW)
     mRAM = writeMemory mPipe
     mRead = syncRead mRAM mAddr
 
-    basicAddr :: Signal clk U13
-    basicAddr = unsigned cpuMemA
-    isBasic = 0xC .<=. page .&&. page .<=. 0xD
-    basicROM = rom basicAddr (Just . fromImage basicImage)
-
-    kernalAddr :: Signal clk U12
+    kernalAddr :: Signal clk U14
     kernalAddr = unsigned cpuMemA
-    isKernal = page .==. 0xF
+    isKernal = 0xC .<=. page
     kernalROM = rom kernalAddr (Just . fromImage kernalImage)
+
+    piaAddr :: Signal clk U2
+    piaAddr = delay $ unsigned cpuMemA
+
+    viaAddr :: Signal clk U4
+    viaAddr = delay $ unsigned cpuMemA
+
+    isPIA1 = (cpuMemA .&. 0xFFF0) .==. 0xE810
+    readPIA1 = flip muxMatrix piaAddr . packMatrix . Matrix.fromList $
+               [ pureS 0xF3 -- $0 PIA1_PA
+               , pureS 0xFF -- $1 PIA1_CRA
+               , pureS 0xFF -- $2 PIA1_PB
+               , pureS 0xFF -- $3 PIA1_CRB
+               ]
+
+    isPIA2 = (cpuMemA .&. 0xFFF0) .==. 0xE820
+    readPIA2 = flip muxMatrix piaAddr . packMatrix . Matrix.fromList $
+               [ pureS 0xFF -- $0 PIA2_PA
+               , pureS 0xFF -- $1 PIA2_CRA
+               , pureS 0xFF -- $2 PIA2_PB
+               , pureS 0xFF -- $3 PIA2_CRB
+               ]
+
+    isVIA = (cpuMemA .&. 0xFFF0) .==. 0xE840
+    readVIA = flip muxMatrix viaAddr . packMatrix . Matrix.fromList $
+              [ pureS 0xDF -- $0 VIA_PRB
+              , pureS 0xDF -- $1 VIA_PRA
+              , pureS 0xDF -- $2 VIA_DDRB
+              , pureS 0xDF -- $3 VIA_DDRA
+              , pureS 0xDF -- $4 VIA_T1CL
+              , pureS 0xDF -- $5 VIA_T1CH
+              , pureS 0xDF -- $6 VIA_T1LL
+              , pureS 0xDF -- $7 VIA_T1LH
+              , pureS 0xDF -- $8 VIA_T2CL
+              , pureS 0xDF -- $9 VIA_T2CH
+              , pureS 0xDF -- $A VIA_SR
+              , pureS 0xDF -- $B VIA_ACR
+              , pureS 0xDF -- $C VIA_PCR
+              , pureS 0xDF -- $D VIA_IFR
+              , pureS 0xDF -- $E VIA_IER
+              , pureS 0xDF -- $F VIA_PRA_NHS
+              ]
 
     cpuMemR = forceDefined 0x20 $
               memoryMapping
-              [ (isKernal, kernalROM)
-              , (isBasic, basicROM)
-              , (isVideo, vRead)
+              [ (isPIA1,   readPIA1)
+              , (isPIA2,   readPIA2)
+              , (isVIA,    readVIA)
+              , (isKernal, kernalROM)
+              , (isVideo,  vRead)
               , (isMemory, mRead)
               ]
