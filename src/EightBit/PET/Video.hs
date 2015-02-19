@@ -15,12 +15,6 @@ import Hardware.KansasLava.VGA.Driver
 
 import Data.Sized.Ix
 import Data.Sized.Unsigned as Unsigned
-import Data.Sized.Matrix (Matrix)
-import qualified Data.Sized.Matrix as Matrix
-import Data.Bits
-
--- import System.FilePath
--- import System.Directory
 
 type VidX = U9
 type VidY = U8
@@ -48,7 +42,7 @@ text40x25 color TextIn{..} = (TextOut{..}, VGADriverOut{vgaOutX = x', vgaOutY = 
 
     (x', y') = (packEnabled inField cX, packEnabled inField cY)
 
-    (cX, fontCol, cY, fontRow, newCol, rowPhase) = runRTL $ do
+    (cX, fontCol, cY, fontRow, newCol, _rowPhase) = runRTL $ do
         col <- newReg (0 :: X8)
         cX <- newReg (0 :: U6)
         row <- newReg (0 :: X8)
@@ -91,11 +85,6 @@ text40x25 color TextIn{..} = (TextOut{..}, VGADriverOut{vgaOutX = x', vgaOutY = 
         rIdx <- newReg 0
         rBuf <- newReg 0
 
-        let updateIdx idx' = WHEN vgaOutClkPhase $ do
-                rIdx := idx'
-        let updateBuf = WHEN (bitNot vgaOutClkPhase) $ do
-                rBuf := textFontRow
-
         CASE [ IF (x .==. 2) $ do
                     rIdx := unsigned cY * 40
              , IF (x .==. 3) $ do
@@ -109,31 +98,8 @@ text40x25 color TextIn{..} = (TextOut{..}, VGADriverOut{vgaOutX = x', vgaOutY = 
         return (reg rIdx, textChar, reg rBuf)
 
     pixel = fontBuf `testABit` (7 - fontCol)
-    -- pixel = textCharIdx .==. pureS (5 * 40)
-    -- pixel = fontCol .==. 0
-    -- pixel = cY .==. 5 .&&. cX .==. 0
     rgb = mux pixel (pureS minBound, color)
-    -- rgb = pack (spread $ rowPhase, -- fontRow .==. 0, -- unsigned cY `xor` unsigned cX,
-    --             -- unsigned textFontRow,
-    --             -- unsigned fontBuf,
-    --             spread pixel,
-    --             -- spread $ textCharIdx .==. pureS 0,
-    --             -- spread $ x .==. 0 .||.
-    --             --          x .==. pureS xStart .||. y .==. pureS yStart .||.
-    --             --          x .==. pureS xEnd - 1 .||. y .==. pureS yEnd - 1 .||.
-    --             --          (inField .&&. fontCol .==. pureS maxBound .&&. newCol .&&. vgaOutClkPhase)
-    --             spread $ inField .&&. fontRow .==. 0
-    --            )
-
-                -- spread pixel,
-                -- spread $ textCharIdx .==. 0)
     rgb' = mux (low .||. inField) (pureS (2, 2, 2), rgb)
-    -- rgb' = rgb
-                       -- pack (mux (fontCol .==. 0) (minBound, maxBound), mux pixel (minBound, maxBound), 0))
-                       -- mux pixel (pureS minBound, color))
-    -- rgb = mux pixel (pureS minBound, color)
-
-    spread b = mux b (pureS minBound, pureS maxBound)
 
     wReal = visibleSize . vgaHorizTiming $ mode
     hReal = visibleSize . vgaVertTiming $ mode
@@ -148,7 +114,6 @@ text40x25 color TextIn{..} = (TextOut{..}, VGADriverOut{vgaOutX = x', vgaOutY = 
     inFieldV = validY .&&. y `betweenCO` (yStart, yEnd)
     inField = inFieldH .&&. inFieldV
 
-    -- rgb = mux inField (pureS (2, 2, 2), mux pixel (pureS minBound, color))
     (r, g, b') = unpack rgb'
     b = funMap (Just . fixBlue) b'
 

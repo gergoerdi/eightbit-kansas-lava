@@ -1,30 +1,20 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-module EightBit.PET.Board (board, boardCircuit) where
+module EightBit.PET.Board (board) where
 
 import MOS6502.Types
 import MOS6502.CPU
 import EightBit.PET.Video
 
 import Language.KansasLava
-import Hardware.KansasLava.Boards.Papilio.Arcade
 import Hardware.KansasLava.VGA.Driver
-import Hardware.KansasLava.VGA
 
 import Data.Sized.Unsigned
 import Data.Sized.Matrix
-import qualified Data.Sized.Matrix as Matrix
 
 import Data.Bits
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
-
-loadFont :: BS.ByteString -> U11 -> Byte
-loadFont font = fromIntegral . BS.index font . fromIntegral
-
-board :: ByteString -> ByteString -> ByteString -> Fabric ()
-board fontImage kernalImage basicImage = do
-    vga . encodeVGA . vgaOut . fst $ boardCircuit fontImage kernalImage basicImage
 
 fromImage :: (Integral a) => ByteString -> a -> Byte
 fromImage bs addr | addr' < BS.length bs = fromIntegral . BS.index bs $ addr'
@@ -38,14 +28,14 @@ memoryMapping :: (Clock clk, Rep a)
               -> Signal clk a
 memoryMapping = foldr (\(sel, v) sig -> mux (delay sel) (sig, v))
 
-boardCircuit :: forall clk. (Clock clk)
-             => ByteString
-             -> ByteString
-             -> ByteString
-             -> (VGADriverOut clk X6 X5 U4 U4 U4,
-                 ((CPUIn clk, CPUOut clk, CPUDebug clk),
-                  Signal clk (Bool, Byte)))
-boardCircuit fontImage kernalImage basicImage = (vga, ((cpuIn, cpuOut, cpuDebug), pack (delay isKernal, kernalROM)))
+board :: forall clk. (Clock clk)
+      => ByteString
+      -> ByteString
+      -> ByteString
+      -> (VGADriverOut clk X6 X5 U4 U4 U4,
+          ((CPUIn clk, CPUOut clk, CPUDebug clk),
+           Signal clk (Bool, Byte)))
+board fontImage kernalImage basicImage = (vga, ((cpuIn, cpuOut, cpuDebug), pack (delay isKernal, kernalROM)))
   where
     (TextOut{..}, vga) = text40x25 (pureS maxBound) TextIn{..}
     cpuIn = CPUIn{..}

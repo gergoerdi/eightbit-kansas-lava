@@ -11,13 +11,14 @@ import System.Console.GetOpt
 import System.Exit
 
 import Data.Word (Word8)
+import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import Data.Char (toLower)
 import Data.Monoid
 
 import Hardware.KansasLava.Boards.Papilio.Arcade (Model(..))
 import EightBit.PET.Video (synthesize)
-import qualified EightBit.PET.Board as Board
+import qualified EightBit.PET.Machine as Machine
 
 data Flag = ImageFile FilePath
           | XilinxRoot FilePath
@@ -51,13 +52,14 @@ toPETSCII :: Word8 -> Word8
 toPETSCII c | 0x40 <= c && c <= 0x90 = c - 0x40
             | otherwise = c
 
-unlinesPETSCII :: [BS.ByteString] -> BS.ByteString
+unlinesPETSCII :: [ByteString] -> ByteString
 unlinesPETSCII = BS.concat . map (extendTo 40)
   where
     extendTo n bs = bs <> BS.replicate k 0x20
       where
         k = n - (BS.length bs `mod` n)
 
+loadKernal :: FilePath -> IO ByteString
 loadKernal fileName = do
     bs <- BS.readFile fileName
     return $ bs <>
@@ -70,12 +72,14 @@ main = do
     kernal <- loadKernal "image/hello.obj"
     basic <- return ""
 
+    print [BS.index kernal 0x0FFC, BS.index kernal 0x0FFD]
+
     createDirectoryIfMissing True "ise"
     setCurrentDirectory "ise"
     shakeArgsWith shakeOptions flags $ \flags targets -> do
         (xilinxConfig, model) <- mkXilinxConfig flags
 
-        (vhdl, ucf) <- synthesize model modName (Board.board font kernal basic)
+        (vhdl, ucf) <- synthesize model modName (Machine.machine font kernal basic)
         return $ Just $ do
             want $ if null targets then [modName <.> "bit"] else targets
 
