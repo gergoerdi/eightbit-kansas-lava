@@ -1,17 +1,15 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-module EightBit.PET.Board (board) where
+module EightBit.PET.Board (board, fromImage) where
 
 import MOS6502.Types
 import MOS6502.CPU
-import EightBit.PET.Video
 
 import Language.KansasLava
-import Hardware.KansasLava.VGA.Driver
+import Language.KansasLava.Signal
 
 import Data.Sized.Unsigned
-import Data.Sized.Matrix
-
+import Control.Applicative
 import Data.Bits
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
@@ -23,21 +21,19 @@ fromImage bs addr | addr' < BS.length bs = fromIntegral . BS.index bs $ addr'
     addr' = fromIntegral addr
 
 memoryMapping :: (Clock clk, Rep a)
-              => Signal clk a
-              -> [(Signal clk Bool, Signal clk a)]
+              => [(Signal clk Bool, Signal clk a)]
               -> Signal clk a
-memoryMapping = foldr (\(sel, v) sig -> mux (delay sel) (sig, v))
+memoryMapping = foldr (\(sel, v) sig -> mux (delay sel) (sig, v)) undefinedS
+
+forceDefined :: (Clock clk, Rep a) => a -> Signal clk a -> Signal clk a
+forceDefined def = shallowMapS (fmap (optX . (<|> Just def) . unX))
 
 board :: forall clk. (Clock clk)
       => ByteString
       -> ByteString
-      -> ByteString
-      -> (VGADriverOut clk X6 X5 U4 U4 U4,
-          ((CPUIn clk, CPUOut clk, CPUDebug clk),
-           Signal clk (Bool, Byte)))
-board fontImage kernalImage basicImage = (vga, ((cpuIn, cpuOut, cpuDebug), pack (delay isKernal, kernalROM)))
+      -> (Signal clk (U10 -> Byte), (CPUIn clk, CPUOut clk, CPUDebug clk))
+board kernalImage basicImage = (vRAM, (cpuIn, cpuOut, cpuDebug))
   where
-    (TextOut{..}, vga) = text40x25 (pureS maxBound) TextIn{..}
     cpuIn = CPUIn{..}
     (cpuOut@CPUOut{..}, cpuDebug) = cpu cpuIn
 
@@ -81,21 +77,10 @@ board fontImage kernalImage basicImage = (vga, ((cpuIn, cpuOut, cpuDebug), pack 
     isKernal = page .==. 0xF
     kernalROM = rom kernalAddr (Just . fromImage kernalImage)
 
-    cpuMemR = memoryMapping 0
+    cpuMemR = forceDefined 0x20 $
+              memoryMapping
               [ (isKernal, kernalROM)
               , (isBasic, basicROM)
               , (isVideo, vRead)
               , (isMemory, mRead)
               ]
-
-    fontAddr :: Signal clk U11
-    fontAddr = unsigned (textFontIdx .&. 0x7F) `shiftL` 3 + unsigned textFontRowIdx
-    textFontRow = invertFont (textFontIdx `testABit` 7) $
-                  rom fontAddr (Just . fromImage fontImage)
-    textChar = syncRead vRAM textCharIdx
-
-invertFont :: (Clock clk)
-           => Signal clk Bool -> Signal clk Byte -> Signal clk Byte
-invertFont b = xor mask
-  where
-    mask = mux b (0, 0xff)
