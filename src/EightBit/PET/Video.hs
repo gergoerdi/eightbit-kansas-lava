@@ -35,7 +35,7 @@ text40x25 :: forall clk. (Clock clk)
 text40x25 color TextIn{..} = (TextOut{..}, VGADriverOut{vgaOutX = x', vgaOutY = y', ..})
   where
     mode = vga800x600at60
-    VGADriverOut{..} = driveVGA mode (VGADriverIn r g b)
+    VGADriverOut{..} = driveVGA (1 :: U1) mode (VGADriverIn r g b)
 
     (validX, x) = unpackEnabled vgaOutX
     (validY, y) = unpackEnabled vgaOutY
@@ -135,11 +135,11 @@ synthesize model modName bench = do
         bench
 
     mod <- netlistCircuit modName kleg
-    let mod' = dcm80MHz clock mod
+    let mod' = dcm40MHz clock mod
         vhdl = genVHDL mod' ["work.lava.all", "work.all"]
 
     ucf <- toUCF model kleg
 
     return (vhdl, ucf)
   where
-    clock = "CLK_80MHZ"
+    clock = "CLK_40MHZ"

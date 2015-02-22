@@ -1,6 +1,6 @@
 {-# LANGUAGE RecordWildCards #-}
 module EightBit.PET.DCM
-       ( dcm80MHz
+       ( dcm40MHz, dcm80MHz
        ) where
 
 import Language.Netlist.AST
@@ -32,3 +32,7 @@ dcm dcmName newClock Module{..} = Module name inputs outputs [] decls
 -- | Use 80MHz DCM to replace clock signal
 dcm80MHz :: Ident -> Module -> Module
 dcm80MHz = dcm "dcm_32_to_80"
+
+-- | Use 40MHz DCM to replace clock signal
+dcm40MHz :: Ident -> Module -> Module
+dcm40MHz = dcm "dcm_32_to_40"

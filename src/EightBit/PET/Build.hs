@@ -69,9 +69,8 @@ loadKernal fileName = do
 main :: IO ()
 main = do
     font <- BS.readFile "characters-1.901447-08.bin"
-    kernal <- loadKernal "image/hello.obj"
-
-    print [BS.index kernal 0x0FFC, BS.index kernal 0x0FFD]
+    -- kernal <- loadKernal "image/hello.obj"
+    kernal <- loadKernal "image/kernal/901447/rom-1.bin"
 
     createDirectoryIfMissing True "ise"
     setCurrentDirectory "ise"
@@ -90,4 +89,4 @@ main = do
             ]
 
     modName = "pet"
-    xaws = ["dcm_32_to_80"]
+    xaws = ["dcm_32_to_40"]

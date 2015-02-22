@@ -25,7 +25,7 @@ library
         kansas-lava >=0.2.4 && < 0.2.5,
         netlist >=0.3 && <0.4,
         netlist-to-vhdl >=0.3 && <0.4,
-        kansas-lava-papilio >= 0.1.1 && < 0.2,
+        kansas-lava-papilio >= 0.2 && < 0.3,
         mos6502-kansas-lava == 0.0.0.0,
         sized-types >=0.3,
         bytestring
@@ -40,8 +40,11 @@ executable eightbit-pet
   hs-source-dirs:      src
   main-is:             EightBit/PET/Build.hs
   other-modules:
+        EightBit.PET.Utils
+        EightBit.PET.PIA
         EightBit.PET.Board
         EightBit.PET.Machine
+        EightBit.PET.Machine3
         EightBit.PET.Video
         
   build-depends:
@@ -49,7 +52,7 @@ executable eightbit-pet
         kansas-lava >=0.2.4 && < 0.2.5,
         netlist >=0.3 && <0.4,
         netlist-to-vhdl >=0.3 && <0.4,
-        kansas-lava-papilio >= 0.1.1 && < 0.2,
+        kansas-lava-papilio >= 0.2 && < 0.3,
         kansas-lava-shake >= 0.1.1 && < 0.2,
         mos6502-kansas-lava == 0.0.0.0,
         shake,
