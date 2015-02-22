@@ -76,28 +76,35 @@ text40x25 color TextIn{..} = (TextOut{..}, VGADriverOut{vgaOutX = x', vgaOutY = 
 
         return (reg cX, reg col,
                 reg cY, reg row,
-                reg phase,
+                var phase,
                 reg rowPhase)
 
     textFontRowIdx = fontRow
 
-    (textCharIdx, textFontIdx, fontBuf) = runRTL $ do
-        rIdx <- newReg 0
-        rBuf <- newReg 0
+    newAddr = (x .==. 10) .||. (fontCol .==. maxBound .&&. newCol)
+    newData = (x .==. 11) .||. (fontCol .==. maxBound .&&. bitNot newCol)
 
-        CASE [ IF (x .==. 2) $ do
-                    rIdx := unsigned cY * 40
-             , IF (x .==. 3) $ do
-                    rBuf := textFontRow
-             , IF (inField .&&. fontCol .==. 0 .&&. newCol .&&. vgaOutClkPhase) $ do
-                    rIdx := reg rIdx + 1
-             , IF (inField .&&. fontCol .==. pureS maxBound .&&. newCol .&&. vgaOutClkPhase) $ do
-                    rBuf := textFontRow
-             ]
+    (textCharIdx, textFontIdx, fontData) = runRTL $ do
+        -- textCharIdx is always the *next* index
+        let textVOffset = unsigned cY * 40
+            textHOffset = unsigned cX + 1
+        let textCharIdx = mux (y .>=. pureS yStart)
+                          (0,
+                           textVOffset + mux (x .>=. pureS xStart) (0, textHOffset))
 
-        return (reg rIdx, textChar, reg rBuf)
+        -- On last column, load next character...
+        charBuffer <- newReg 0
+        WHEN newAddr $ do
+            charBuffer := textChar
 
-    pixel = fontBuf `testABit` (7 - fontCol)
+        -- ... and store the next row
+        rowBuffer <- newReg 0
+        WHEN newData $ do
+            rowBuffer := textFontRow
+
+        return (textCharIdx, var charBuffer, var rowBuffer)
+
+    pixel = fontData `testABit` (7 - fontCol)
     rgb = mux pixel (pureS minBound, color)
     rgb' = mux (low .||. inField) (pureS (2, 2, 2), rgb)
 
