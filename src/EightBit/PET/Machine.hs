@@ -19,7 +19,7 @@ machine fontImage kernalImage = do
     vga . encodeVGA . vgaOut $ video
   where
     (TextOut{..}, video) = text40x25 (pureS maxBound) TextIn{..}
-    (textRAM, _) = board kernalImage
+    (textRAM, _) = board kernalImage (vgaOutVBlank video)
 
     fontAddr :: Signal CLK U11
     fontAddr = unsigned (textFontIdx .&. 0x7F) `shiftL` 3 + unsigned textFontRowIdx

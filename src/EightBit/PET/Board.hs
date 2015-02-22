@@ -2,15 +2,16 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 module EightBit.PET.Board (board, fromImage) where
 
+import EightBit.PET.Utils
+import EightBit.PET.PIA
 import MOS6502.Types
+import MOS6502.Utils
 import MOS6502.CPU
 
 import Language.KansasLava
-import Language.KansasLava.Signal
 
 import Data.Sized.Unsigned
 import qualified Data.Sized.Matrix as Matrix
-import Control.Applicative
 import Data.Bits
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
@@ -21,23 +22,15 @@ fromImage bs addr | addr' < BS.length bs = fromIntegral . BS.index bs $ addr'
   where
     addr' = fromIntegral addr
 
-memoryMapping :: (Clock clk, Rep a)
-              => [(Signal clk Bool, Signal clk a)]
-              -> Signal clk a
-memoryMapping = foldr (\(sel, v) sig -> mux (delay sel) (sig, v)) undefinedS
-
-forceDefined :: (Clock clk, Rep a) => a -> Signal clk a -> Signal clk a
-forceDefined def = shallowMapS (fmap (optX . (<|> Just def) . unX))
-
 board :: forall clk. (Clock clk)
       => ByteString
+      -> Signal clk Bool
       -> (Signal clk (U10 -> Byte), (CPUIn clk, CPUOut clk, CPUDebug clk))
-board kernalImage = (vRAM, (cpuIn, cpuOut, cpuDebug))
+board kernalImage vsync = (vRAM, (cpuIn, cpuOut, cpuDebug))
   where
     cpuIn = CPUIn{..}
     (cpuOut@CPUOut{..}, cpuDebug) = cpu cpuIn
 
-    cpuIRQ = high
     cpuNMI = high
 
     -- Slow down CPU 50-fold
@@ -81,12 +74,20 @@ board kernalImage = (vRAM, (cpuIn, cpuOut, cpuDebug))
     viaAddr = delay $ unsigned cpuMemA
 
     isPIA1 = (cpuMemA .&. 0xFFF0) .==. 0xE810
-    readPIA1 = flip muxMatrix piaAddr . packMatrix . Matrix.fromList $
-               [ pureS 0xF3 -- $0 PIA1_PA
-               , pureS 0xFF -- $1 PIA1_CRA
-               , pureS 0xFF -- $2 PIA1_PB
-               , pureS 0xFF -- $3 PIA1_CRB
-               ]
+    PIAOut{ piaR = readPIA1, piaIRQB = _cpuIRQ } =
+        pia PIAIn{ piaA = packEnabled isPIA1 (unsigned cpuMemA)
+                 , piaW = cpuMemW
+                 , piaPerifA = (low, low)
+                 , piaPerifB = (vsync, low)
+                 }
+    cpuIRQ = high
+
+    -- readPIA1 = flip muxMatrix piaAddr . packMatrix . Matrix.fromList $
+    --            [ pureS 0xF3 -- $0 PIA1_PA
+    --            , pureS 0xFF -- $1 PIA1_CRA
+    --            , pureS 0xFF -- $2 PIA1_PB
+    --            , pureS 0xFF -- $3 PIA1_CRB
+    --            ]
 
     isPIA2 = (cpuMemA .&. 0xFFF0) .==. 0xE820
     readPIA2 = flip muxMatrix piaAddr . packMatrix . Matrix.fromList $

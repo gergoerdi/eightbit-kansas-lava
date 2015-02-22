@@ -16,8 +16,10 @@ library
   hs-source-dirs:      src
   exposed-modules:
         EightBit.PET.Board
-  other-modules:
         EightBit.PET.Video
+        EightBit.PET.PIA
+  other-modules:
+        EightBit.PET.Utils
         EightBit.PET.DCM
 
   build-depends:
