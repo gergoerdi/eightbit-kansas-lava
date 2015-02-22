@@ -74,13 +74,12 @@ board kernalImage vsync = (vRAM, (cpuIn, cpuOut, cpuDebug))
     viaAddr = delay $ unsigned cpuMemA
 
     isPIA1 = (cpuMemA .&. 0xFFF0) .==. 0xE810
-    PIAOut{ piaR = readPIA1, piaIRQB = _cpuIRQ } =
+    PIAOut{ piaR = readPIA1, piaIRQB = cpuIRQ } =
         pia PIAIn{ piaA = packEnabled isPIA1 (unsigned cpuMemA)
                  , piaW = cpuMemW
                  , piaPerifA = (low, low)
                  , piaPerifB = (vsync, low)
                  }
-    cpuIRQ = high
 
     -- readPIA1 = flip muxMatrix piaAddr . packMatrix . Matrix.fromList $
     --            [ pureS 0xF3 -- $0 PIA1_PA
