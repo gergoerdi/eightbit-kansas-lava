@@ -102,7 +102,7 @@ text40x25 color TextIn{..} = (TextOut{..}, VGADriverOut{vgaOutX = x', vgaOutY = 
         WHEN newData $ do
             rowBuffer := textFontRow
 
-        return (textCharIdx, var charBuffer, var rowBuffer)
+        return (textCharIdx, var charBuffer, reg rowBuffer)
 
     pixel = fontData `testABit` (7 - fontCol)
     rgb = mux pixel (pureS minBound, color)
