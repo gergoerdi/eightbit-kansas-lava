@@ -77,8 +77,8 @@ board kernalImage vsync = (vRAM, (cpuIn, cpuOut, cpuDebug))
     PIAOut{ piaR = readPIA1, piaIRQB = cpuIRQ } =
         pia PIAIn{ piaA = packEnabled isPIA1 (unsigned cpuMemA)
                  , piaW = cpuMemW
-                 , piaPerifA = (low, low)
-                 , piaPerifB = (vsync, low)
+                 , piaTriggerA = (low, low)
+                 , piaTriggerB = (vsync, low)
                  }
 
     -- readPIA1 = flip muxMatrix piaAddr . packMatrix . Matrix.fromList $

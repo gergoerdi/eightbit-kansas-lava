@@ -12,8 +12,8 @@ import Data.Bits
 
 data PIAIn clk = PIAIn{ piaA :: Signal clk (Enabled U2)
                       , piaW :: Signal clk (Enabled Byte)
-                      , piaPerifA :: (Signal clk Bool, Signal clk Bool)
-                      , piaPerifB :: (Signal clk Bool, Signal clk Bool)
+                      , piaTriggerA :: (Signal clk Bool, Signal clk Bool)
+                      , piaTriggerB :: (Signal clk Bool, Signal clk Bool)
                       }
                deriving Show
 
@@ -25,18 +25,22 @@ data PIAOut clk = PIAOut{ piaR :: Signal clk Byte
 
 pia :: forall clk. (Clock clk) => PIAIn clk -> PIAOut clk
 pia PIAIn{..} = runRTL $ do
-    let halfPIA (perif1, _perif2) isP isC = do
+    let halfPIA (trigger1, _trigger2) isP isC perif = do
             irq1 <- newReg False
             irq2 <- newReg False
             ctrlLo <- newReg (0 :: U6)
             let ctrl = (unsigned (reg irq1) `shiftL` 7) .|.
                        (unsigned (reg irq2) `shiftL` 6) .|.
                        unsigned (reg ctrlLo)
+                targetPerif = ctrl `testABit` 3
 
-            ddr <- newReg 0
+            ddr <- newReg (0 :: Byte)
+            dat <- newReg (0 :: Byte)
+            let perif' = (perif .&. complement (reg ddr)) .|. (reg dat .&. reg ddr)
+                port = mux targetPerif (reg ddr, perif')
 
-            let rise1 = risingEdge perif1
-                fall1 = fallingEdge perif1
+            let rise1 = risingEdge trigger1
+                fall1 = fallingEdge trigger1
             let watchRise1 = reg ctrlLo `testABit` 1
 
             WHEN ((watchRise1 .&&. rise1) .||. (bitNot watchRise1 .&&. fall1)) $ do
@@ -49,8 +53,8 @@ pia PIAIn{..} = runRTL $ do
                          irq2 := low
               , IF we $ do -- Write-triggered events
                      CASE [ IF isP . CASE $
-                            [ IF (ctrl `testABit` 3) $ do
-                                   return ()
+                            [ IF targetPerif $ do
+                                   dat := written
                             , OTHERWISE $ do
                                    ddr := written
                             ]
@@ -62,14 +66,14 @@ pia PIAIn{..} = runRTL $ do
               ]
 
             let irq = bitNot $ risingEdge (reg irq1) .||. risingEdge (reg irq2)
-            return (ctrl, ddr, irq)
+            return (port, ctrl, irq)
 
-    (ctrlA, ddrA, piaIRQA) <- halfPIA piaPerifA isPA isCA
-    (ctrlB, ddrB, piaIRQB) <- halfPIA piaPerifB isPB isCB
+    (portA, ctrlA, piaIRQA) <- halfPIA piaTriggerA isPA isCA 0xFF
+    (portB, ctrlB, piaIRQB) <- halfPIA piaTriggerB isPB isCB 0xFF
 
-    let piaR = memoryMapping [ (isPA, mux (ctrlA `testABit` 2) (reg ddrA, 0xF3))
+    let piaR = memoryMapping [ (isPA, portA)
                              , (isCA, ctrlA)
-                             , (isPB, mux (ctrlB `testABit` 2) (reg ddrB, 0xFF))
+                             , (isPB, portB)
                              , (isCB, ctrlB)
                              ]
     return PIAOut{..}
