@@ -1,4 +1,4 @@
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE RecordWildCards, ViewPatterns #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 module EightBit.PET.Board (board, fromImage) where
 
@@ -25,8 +25,9 @@ fromImage bs addr | addr' < BS.length bs = fromIntegral . BS.index bs $ addr'
 board :: forall clk. (Clock clk)
       => ByteString
       -> Signal clk Bool
-      -> (Signal clk (U10 -> Byte), (CPUIn clk, CPUOut clk, CPUDebug clk))
-board kernalImage vsync = (vRAM, (cpuIn, cpuOut, cpuDebug))
+      -> Signal clk Byte
+      -> (Signal clk (U10 -> Byte), Signal clk U4, (CPUIn clk, CPUOut clk, CPUDebug clk))
+board kernalImage vsync kbRow = (vRAM, kbRowSelect, (cpuIn, cpuOut, cpuDebug))
   where
     cpuIn = CPUIn{..}
     (cpuOut@CPUOut{..}, cpuDebug) = cpu cpuIn
@@ -74,11 +75,13 @@ board kernalImage vsync = (vRAM, (cpuIn, cpuOut, cpuDebug))
     viaAddr = delay $ unsigned cpuMemA
 
     isPIA1 = (cpuMemA .&. 0xFFF0) .==. 0xE810
-    PIAOut{ piaR = readPIA1, piaIRQB = cpuIRQ } =
+    PIAOut{ piaR = readPIA1, piaIRQB = cpuIRQ, piaOutputA = unsigned -> kbRowSelect } =
         pia PIAIn{ piaA = packEnabled isPIA1 (unsigned cpuMemA)
                  , piaW = cpuMemW
                  , piaTriggerA = (low, low)
                  , piaTriggerB = (vsync, low)
+                 , piaInputA = 0xFF
+                 , piaInputB = kbRow
                  }
 
     -- readPIA1 = flip muxMatrix piaAddr . packMatrix . Matrix.fromList $

@@ -12,14 +12,14 @@ import Data.Bits
 
 data PIAIn clk = PIAIn{ piaA :: Signal clk (Enabled U2)
                       , piaW :: Signal clk (Enabled Byte)
-                      , piaTriggerA :: (Signal clk Bool, Signal clk Bool)
-                      , piaTriggerB :: (Signal clk Bool, Signal clk Bool)
+                      , piaTriggerA, piaTriggerB :: (Signal clk Bool, Signal clk Bool)
+                      , piaInputA, piaInputB :: Signal clk Byte
                       }
                deriving Show
 
 data PIAOut clk = PIAOut{ piaR :: Signal clk Byte
-                        , piaIRQA :: Signal clk ActiveLow
-                        , piaIRQB :: Signal clk ActiveLow
+                        , piaIRQA, piaIRQB :: Signal clk ActiveLow
+                        , piaOutputA, piaOutputB :: Signal clk Byte
                         }
                 deriving Show
 
@@ -66,10 +66,10 @@ pia PIAIn{..} = runRTL $ do
               ]
 
             let irq = bitNot $ risingEdge (reg irq1) .||. risingEdge (reg irq2)
-            return (port, ctrl, irq)
+            return (port, ctrl, irq, reg dat)
 
-    (portA, ctrlA, piaIRQA) <- halfPIA piaTriggerA isPA isCA 0xFF
-    (portB, ctrlB, piaIRQB) <- halfPIA piaTriggerB isPB isCB 0xFF
+    (portA, ctrlA, piaIRQA, piaOutputA) <- halfPIA piaTriggerA isPA isCA piaInputA
+    (portB, ctrlB, piaIRQB, piaOutputB) <- halfPIA piaTriggerB isPB isCB piaInputB
 
     let piaR = memoryMapping [ (isPA, portA)
                              , (isCA, ctrlA)

@@ -18,6 +18,7 @@ library
         EightBit.PET.Board
         EightBit.PET.Video
         EightBit.PET.PIA
+        EightBit.PET.Keyboard
   other-modules:
         EightBit.PET.Utils
         EightBit.PET.DCM
@@ -44,9 +45,9 @@ executable eightbit-pet
   other-modules:
         EightBit.PET.Utils
         EightBit.PET.PIA
+        EightBit.PET.Keyboard
         EightBit.PET.Board
         EightBit.PET.Machine
-        EightBit.PET.Machine3
         EightBit.PET.Video
         
   build-depends:
