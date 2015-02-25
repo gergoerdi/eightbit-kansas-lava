@@ -10,6 +10,7 @@ import MOS6502.CPU
 
 import Language.KansasLava
 
+import Data.Sized.Ix
 import Data.Sized.Unsigned
 import qualified Data.Sized.Matrix as Matrix
 import Data.Bits
@@ -26,7 +27,7 @@ board :: forall clk. (Clock clk)
       => ByteString
       -> Signal clk Bool
       -> Signal clk Byte
-      -> (Signal clk (U10 -> Byte), Signal clk U4, (CPUIn clk, CPUOut clk, CPUDebug clk))
+      -> (Signal clk (U10 -> Byte), Signal clk X10, (CPUIn clk, CPUOut clk, CPUDebug clk))
 board kernalImage vsync kbRow = (vRAM, kbRowSelect, (cpuIn, cpuOut, cpuDebug))
   where
     cpuIn = CPUIn{..}
@@ -81,7 +82,7 @@ board kernalImage vsync kbRow = (vRAM, kbRowSelect, (cpuIn, cpuOut, cpuDebug))
                  , piaTriggerA = (low, low)
                  , piaTriggerB = (vsync, low)
                  , piaInputA = 0xFF
-                 , piaInputB = kbRow
+                 , piaInputB = complement kbRow
                  }
 
     -- readPIA1 = flip muxMatrix piaAddr . packMatrix . Matrix.fromList $
