@@ -4,7 +4,6 @@
 module EightBit.PET.Video where
 
 import MOS6502.Types
-import EightBit.PET.DCM
 
 import Language.KansasLava
 import Language.KansasLava.VHDL
@@ -12,6 +11,7 @@ import Language.Netlist.GenVHDL
 import Hardware.KansasLava.Boards.Papilio
 import Hardware.KansasLava.Boards.Papilio.Arcade
 import Hardware.KansasLava.VGA.Driver
+import Hardware.KansasLava.Xilinx.DCM
 
 import Data.Sized.Ix
 import Data.Sized.Unsigned as Unsigned
@@ -35,7 +35,7 @@ text40x25 :: forall clk. (Clock clk)
 text40x25 color TextIn{..} = (TextOut{..}, VGADriverOut{vgaOutX = x', vgaOutY = y', ..})
   where
     mode = vga800x600at60
-    VGADriverOut{..} = driveVGA (1 :: U1) mode (VGADriverIn r g b)
+    VGADriverOut{..} = driveVGA (Witness :: Witness X1) mode (VGADriverIn r g b)
 
     (validX, x) = unpackEnabled vgaOutX
     (validY, y) = unpackEnabled vgaOutY
@@ -134,7 +134,7 @@ fixBlue b = sorted !! fromIntegral b
 betweenCO :: (Ord a, Rep a) => Signal clk a -> (a, a) -> Signal clk Bool
 x `betweenCO` (lo, hi) = pureS lo .<=. x .&&. x .<. pureS hi
 
-synthesize :: Model -> String -> Fabric () -> IO (String, String)
+synthesize :: Model -> String -> Fabric () -> IO (String, String, [String])
 synthesize model modName bench = do
     kleg <- reifyFabric $ do
         theClk clock
@@ -142,11 +142,13 @@ synthesize model modName bench = do
         bench
 
     mod <- netlistCircuit modName kleg
-    let mod' = dcm40MHz clock mod
+    let mod' = dcm40MHz mod
         vhdl = genVHDL mod' ["work.lava.all", "work.all"]
 
     ucf <- toUCF model kleg
 
-    return (vhdl, ucf)
+    return (vhdl, ucf, [dcmName])
   where
     clock = "CLK_40MHZ"
+    dcmName = "dcm_32_to_40"
+    dcm40MHz = dcm dcmName "CLK_32MHZ" clock

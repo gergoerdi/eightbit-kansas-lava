@@ -77,7 +77,7 @@ main = do
     shakeArgsWith shakeOptions flags $ \flags targets -> do
         (xilinxConfig, model) <- mkXilinxConfig flags
 
-        (vhdl, ucf) <- synthesize model modName (Machine.machine font kernal)
+        (vhdl, ucf, xaws) <- synthesize model modName (Machine.machine font kernal)
         return $ Just $ do
             want $ if null targets then [modName <.> "bit"] else targets
 
@@ -89,4 +89,3 @@ main = do
             ]
 
     modName = "pet"
-    xaws = ["dcm_32_to_40"]
