@@ -100,6 +100,7 @@ scancodes 0x52 = return (9, 4) -- RUN/STOP (')
 scancodes 0x1E = return (1, 0) -- "
 scancodes 0x16 = return (0, 0) -- !
 scancodes 0x77 = return (9, 7) -- = (num lock)
+scancodes 0x79 = return (7, 7) -- + (KP +)
 
 scancodes _    = Nothing
 
