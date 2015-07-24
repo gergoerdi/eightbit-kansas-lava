@@ -3,6 +3,7 @@
 module EightBit.PET.Keyboard where
 
 import MOS6502.Types
+import MOS6502.Utils
 
 import Prelude hiding (sequence)
 import Control.Applicative ((<$>))
@@ -27,20 +28,30 @@ keyboard KeyboardIn{..} = runRTL $ do
     rowRegs <- sequence $ Matrix.forAll $ \_ -> newReg 0
     let rows = reg <$> rowRegs
 
-    CASE [ match keyboardEvent $ \(unpack -> (pressed, scancode)) -> do
-                let toggle mask x = mux pressed (x .&. pureS (complement mask),
-                                                 x .|. pureS mask)
+    CASE [ match (translateKeyboard keyboardEvent) $ \(unpack -> (pressed, row, col)) -> do
+                let mask = muxN [ (col .==. pureS i, 0x01 `shiftL` fromIntegral i)
+                                | i <- [0..7]
+                                ]
+                    toggle x = mux pressed (x .&. complement mask, x .|. mask)
 
-                CASE [ IF (scancode .==. pureS code) $ do
-                            (rowRegs ! i) := toggle mask (rows ! i)
-                     | code <- [minBound..maxBound]
-                     , Just (i, j) <- return $ scancodes code
-                     , let mask = 0x01 `shiftL` fromIntegral j
+                CASE [ IF (row .==. pureS i) $ do
+                            (rowRegs ! i) := toggle (rows ! i)
+                     | i <- [minBound..maxBound]
                      ]
          ]
 
     let keyboardRow = packMatrix rows .!. keyboardRowSel
     return KeyboardOut{..}
+
+translateKeyboard :: (Clock clk)
+                  => Signal clk (Enabled (Bool, U8))
+                  -> Signal clk (Enabled (Bool, X10, X8))
+translateKeyboard keyboardEvent =
+    packEnabled (delay (isEnabled keyboardEvent) .&&. isValid) $
+    pack (delay pressed, row, col)
+  where
+    (pressed, scancode) = unpack $ enabledVal keyboardEvent
+    (isValid, unpack -> (row, col)) = unpackEnabled $ rom scancode (return . scancodes)
 
 scancodes :: U8 -> Maybe (X10, X8)
 scancodes 0x70 = return (8, 6) -- 0
