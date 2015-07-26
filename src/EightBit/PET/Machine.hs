@@ -1,5 +1,5 @@
 {-# LANGUAGE RecordWildCards #-}
-module EightBit.PET.Machine (machine) where
+module EightBit.PET.Machine (machine, injectKeyboard) where
 
 import MOS6502.Types
 import EightBit.PET.Board
@@ -19,11 +19,36 @@ import Data.Sized.Ix
 import Data.Sized.Matrix ((!))
 import qualified Data.Sized.Matrix as Matrix
 import Data.Bits
+import Control.Monad (guard)
+
+injectKeyboard :: (Clock clk)
+               => [U8] -> Signal clk Bool
+               -> Signal clk (Enabled (Bool, U8))
+               -> Signal clk (Enabled (Bool, U8))
+injectKeyboard keys next s = runRTL $ do
+    wait <- newReg (0 :: X20)
+    let finishedWaiting = reg wait .==. pureS maxBound
+    WHEN (bitNot finishedWaiting .&&. next) $ do
+        wait := reg wait + 1
+    let next' = finishedWaiting .&&. next
+
+    i <- newReg (0 :: U8)
+    let finished = reg i .==. pureS n
+    WHEN (bitNot finished .&&. next') $ do
+        i := reg i + 1
+
+    let keycode = rom (reg i) $ \i -> do
+            guard $ i < n
+            return $ keys !! fromIntegral i
+    let key = pack (delay $ bitNot next', keycode)
+    return $ mux (delay finished) (packEnabled finishedWaiting key, s)
+  where
+    n = fromIntegral (length keys) :: U8
 
 machine :: ByteString -> ByteString -> Fabric ()
 machine fontImage kernalImage = do
     (ps2A, _) <- ps2
-    let keyboardEvent = eventPS2 . decodePS2 . samplePS2 $ ps2A
+    let realKeyboardEvent = eventPS2 . decodePS2 . samplePS2 $ ps2A
 
     (buttonUp, buttonDown) <- do
         Buttons{..} <- buttons
@@ -43,7 +68,9 @@ machine fontImage kernalImage = do
                  ]
             return $ reg r
 
-    let (textRAM, keyboardRowSel, _) = board kernalImage (vgaOutVBlank video) keyboardRow
+    let (textRAM, keyboardRowSel, _) = board kernalImage vblank keyboardRow
+        vblank = vgaOutVBlank video
+        keyboardEvent = injectKeyboard initialInput vblank realKeyboardEvent
         (TextOut{..}, video) = text40x25 color TextIn{..}
         KeyboardOut{..} = keyboard KeyboardIn{..}
 
@@ -56,6 +83,12 @@ machine fontImage kernalImage = do
         textChar = syncRead textRAM textCharIdx
 
     vga . encodeVGA . vgaOut $ video
+  where
+    initialInput = [ 0x69, 0x29, 0x43, 0x77, 0x43, 0x79, 0x69, 0x5A -- 1 I=I+1
+                   , 0x72, 0x29, 0x4D, 0x2D, 0x43, 0x31, 0x2C, 0x29, 0x43, 0x5A -- 2 PRINT I
+                   , 0x7A, 0x29, 0x34, 0x44, 0x2C, 0x44, 0x29, 0x69, 0x5A -- 3 GOTO 1
+                   , 0x2D, 0x3C, 0x31, 0x5A -- RUN
+                   ]
 
 invertFont :: (Clock clk)
            => Signal clk Bool -> Signal clk Byte -> Signal clk Byte
