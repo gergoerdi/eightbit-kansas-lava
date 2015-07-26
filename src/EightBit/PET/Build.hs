@@ -71,6 +71,7 @@ main = do
     font <- BS.readFile "characters-1.901447-08.bin"
     -- kernal <- loadKernal "image/hello.obj"
     kernal <- loadKernal "image/kernal/901447/rom-1.bin"
+    -- kernal <- loadKernal "image/AllSuiteA/main.prg"
 
     createDirectoryIfMissing True "ise"
     setCurrentDirectory "ise"
