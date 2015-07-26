@@ -58,7 +58,7 @@ board kernalImage vsync kbRow = (vRAM, kbRowSelect, (cpuIn, cpuOut, cpuDebug))
     mAddr :: Signal clk U13
     mAddr = unsigned cpuMemA
 
-    isMemory = page .<=. 0x1 -- 8K RAM
+    isMemory = page .<. 0x2 -- 8K RAM
     mPipe = packEnabled (isEnabled cpuMemW .&&. isMemory) $
             pack (mAddr, enabledVal cpuMemW)
     mRAM = writeMemory mPipe
@@ -84,13 +84,6 @@ board kernalImage vsync kbRow = (vRAM, kbRowSelect, (cpuIn, cpuOut, cpuDebug))
                  , piaInputA = 0xFF
                  , piaInputB = complement kbRow
                  }
-
-    -- readPIA1 = flip muxMatrix piaAddr . packMatrix . Matrix.fromList $
-    --            [ pureS 0xF3 -- $0 PIA1_PA
-    --            , pureS 0xFF -- $1 PIA1_CRA
-    --            , pureS 0xFF -- $2 PIA1_PB
-    --            , pureS 0xFF -- $3 PIA1_CRB
-    --            ]
 
     isPIA2 = (cpuMemA .&. 0xFFF0) .==. 0xE820
     readPIA2 = flip muxMatrix piaAddr . packMatrix . Matrix.fromList $

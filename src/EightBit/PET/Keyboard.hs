@@ -2,11 +2,9 @@
 {-# LANGUAGE RecordWildCards, ViewPatterns #-}
 module EightBit.PET.Keyboard where
 
-import MOS6502.Types
-import MOS6502.Utils
-
 import Prelude hiding (sequence)
 import Control.Applicative ((<$>))
+import Control.Arrow (second)
 import Data.Traversable (sequence)
 
 import Language.KansasLava
@@ -20,7 +18,7 @@ data KeyboardIn clk = KeyboardIn{ keyboardEvent :: Signal clk (Enabled (Bool, U8
                                 , keyboardRowSel :: Signal clk X10 }
                     deriving Show
 
-data KeyboardOut clk = KeyboardOut{ keyboardRow :: Signal clk Byte }
+data KeyboardOut clk = KeyboardOut{ keyboardRow :: Signal clk U8 }
                      deriving Show
 
 keyboard :: forall clk. (Clock clk) => KeyboardIn clk -> KeyboardOut clk
@@ -28,11 +26,8 @@ keyboard KeyboardIn{..} = runRTL $ do
     rowRegs <- sequence $ Matrix.forAll $ \_ -> newReg 0
     let rows = reg <$> rowRegs
 
-    CASE [ match (translateKeyboard keyboardEvent) $ \(unpack -> (pressed, row, col)) -> do
-                let mask = muxN [ (col .==. pureS i, 0x01 `shiftL` fromIntegral i)
-                                | i <- [0..7]
-                                ]
-                    toggle x = mux pressed (x .&. complement mask, x .|. mask)
+    CASE [ match (translateKeyboard keyboardEvent) $ \(unpack -> (pressed, row, mask)) -> do
+                let toggle x = mux pressed (x .&. complement mask, x .|. mask)
 
                 CASE [ IF (row .==. pureS i) $ do
                             (rowRegs ! i) := toggle (rows ! i)
@@ -45,13 +40,16 @@ keyboard KeyboardIn{..} = runRTL $ do
 
 translateKeyboard :: (Clock clk)
                   => Signal clk (Enabled (Bool, U8))
-                  -> Signal clk (Enabled (Bool, X10, X8))
+                  -> Signal clk (Enabled (Bool, X10, U8))
 translateKeyboard keyboardEvent =
     packEnabled (delay (isEnabled keyboardEvent) .&&. isValid) $
     pack (delay pressed, row, col)
   where
     (pressed, scancode) = unpack $ enabledVal keyboardEvent
-    (isValid, unpack -> (row, col)) = unpackEnabled $ rom scancode (return . scancodes)
+    (isValid, unpack -> (row, col)) = unpackEnabled $ rom scancode (return . scanFun)
+
+    scanFun = fmap (second toMask) . scancodes
+    toMask x = 0x01 `shiftL` fromIntegral x
 
 scancodes :: U8 -> Maybe (X10, X8)
 scancodes 0x70 = return (8, 6) -- 0
