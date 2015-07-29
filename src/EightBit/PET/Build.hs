@@ -15,6 +15,11 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import Data.Char (toLower)
 import Data.Monoid
+import Control.Monad
+
+import Language.KansasLava
+import Language.KansasLava.VHDL
+import Language.Netlist.GenVHDL
 
 import Hardware.KansasLava.Boards.Papilio.Arcade (Model(..))
 import EightBit.PET.Video (synthesize)
@@ -75,18 +80,26 @@ main = do
 
     createDirectoryIfMissing True "ise"
     setCurrentDirectory "ise"
-    shakeArgsWith shakeOptions flags $ \flags targets -> do
-        (xilinxConfig, model) <- mkXilinxConfig flags
 
-        (vhdl, ucf, xaws) <- synthesize model modName (Machine.machine font kernal)
-        return $ Just $ do
-            want $ if null targets then [modName <.> "bit"] else targets
+    let (boardFabric, videoFabric) = Machine.machine font kernal
+    forM_ [("MainBoard", boardFabric), ("Video", videoFabric)] $ \(modName, fabric) -> do
+        mod <- netlistCircuit modName =<< reifyFabric fabric
+        let vhdl = genVHDL mod ["work.lava.all", "work.all"]
+        writeFile ("gensrc" </> modName <.> "vhdl") vhdl
 
-            lavaRules modName vhdl ucf
-            xilinxRules xilinxConfig modName xaws
+
+  --   shakeArgsWith shakeOptions flags $ \flags targets -> do
+  --       (xilinxConfig, model) <- mkXilinxConfig flags
+
+  --       (vhdl, ucf, xaws) <- synthesize model modName (Machine.machine font kernal)
+  --       return $ Just $ do
+  --           want $ if null targets then [modName <.> "bit"] else targets
+
+  --           lavaRules modName vhdl ucf
+  --           xilinxRules xilinxConfig modName xaws
+  -- where
+  --   flags = [ Option [] ["xilinx"] (ReqArg (Right . XilinxRoot) "path") "Path to Xilinx toolchain"
+  --           , Option [] ["papilio"] (ReqArg (Right . PapilioModel) "model") "Target Papilio model (One/Pro)"
+  --           ]
   where
-    flags = [ Option [] ["xilinx"] (ReqArg (Right . XilinxRoot) "path") "Path to Xilinx toolchain"
-            , Option [] ["papilio"] (ReqArg (Right . PapilioModel) "model") "Target Papilio model (One/Pro)"
-            ]
-
     modName = "pet"

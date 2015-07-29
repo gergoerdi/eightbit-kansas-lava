@@ -27,8 +27,9 @@ board :: forall clk. (Clock clk)
       => ByteString
       -> Signal clk Bool
       -> Signal clk Byte
-      -> (Signal clk (U10 -> Byte), Signal clk X10, (CPUIn clk, CPUOut clk, CPUDebug clk))
-board kernalImage vsync kbRow = (vRAM, kbRowSelect, (cpuIn, cpuOut, cpuDebug))
+      -> Signal clk Byte
+      -> (Signal clk X10, (Signal clk U10, Signal clk (Enabled Byte)), (CPUIn clk, CPUOut clk, CPUDebug clk))
+board kernalImage vsync kbRow vRead = (kbRowSelect, (vAddr, vWrite), (cpuIn, cpuOut, cpuDebug))
   where
     cpuIn = CPUIn{..}
     (cpuOut@CPUOut{..}, cpuDebug) = cpu cpuIn
@@ -48,12 +49,7 @@ board kernalImage vsync kbRow = (vRAM, kbRowSelect, (cpuIn, cpuOut, cpuDebug))
     vAddr = unsigned cpuMemA
 
     isVideo = page .==. 0x8
-    vPipe = forceDefined Nothing $
-            packEnabled (isEnabled cpuMemW .&&. isVideo) $
-            forceDefined (0, 0) $
-            pack (vAddr, enabledVal cpuMemW)
-    vRAM = writeMemory vPipe
-    vRead = syncRead vRAM vAddr
+    vWrite = packEnabled (isVideo .&&. isEnabled cpuMemW) (enabledVal cpuMemW)
 
     mAddr :: Signal clk U13
     mAddr = unsigned cpuMemA
