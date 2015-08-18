@@ -2,6 +2,7 @@
 module EightBit.PET.Machine (machine, injectKeyboard) where
 
 import MOS6502.Types
+import MOS6502.CPU (CPUIn(..), CPUOut(..), CPUDebug(..))
 import EightBit.PET.Board
 import EightBit.PET.Video
 import EightBit.PET.Keyboard
@@ -54,13 +55,26 @@ machine fontImage kernalImage = (main, video)
 
         (ps2A, _) <- ps2
         let realKeyboardEvent = eventPS2 . decodePS2 . samplePS2 $ ps2A
-        -- let realKeyboardEvent = disabledS
 
         vblank <- inStdLogic "VBLANK"
         vRead <- inStdLogicVector "VRAM_DOUT"
-        let (keyboardRowSel, (vAddr, vWrite), _) = board kernalImage vblank keyboardRow vRead
+        let (keyboardRowSel, (vAddr, vWrite), (CPUIn{..}, CPUOut{..}, CPUDebug{..})) =
+                  board kernalImage vblank keyboardRow vRead
             keyboardEvent = injectKeyboard initialInput vblank realKeyboardEvent
             KeyboardOut{..} = keyboard KeyboardIn{..}
+
+        -- Debug output
+        outStdLogicVector "PC" cpuPC
+        outStdLogicVector "ADDR" cpuMemA
+        outStdLogicVector "STATE" cpuState
+        outStdLogicVector "READ" cpuMemR
+        outStdLogicVector "WRITE" cpuMemW
+        outStdLogicVector "FLAGS" cpuP
+        outStdLogicVector "SP" cpuSP
+        outStdLogicVector "A" cpuA
+        outStdLogicVector "X" cpuX
+        outStdLogicVector "Y" cpuY
+        outStdLogicVector "KEYBOARD" keyboardEvent
 
         let (vram_we, vram_write_data) = unpackEnabled vWrite
             vram_addr = vAddr
