@@ -55,6 +55,8 @@ executable eightbit-pet
         kansas-lava-papilio >= 0.3 && < 0.4,
         kansas-lava-shake >= 0.1.1 && < 0.2,
         mos6502-kansas-lava == 0.0.0.0,
+        hastache,
+        text,
         shake,
         sized-types >=0.3,
         bytestring,

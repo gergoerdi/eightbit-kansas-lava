@@ -1,5 +1,5 @@
-set myProject "PET"
-set myScript "PET.tcl"
+set myProject "{{project}}"
+set myScript "{{project}}.tcl"
 
 proc run_process {} {
 
@@ -15,7 +15,7 @@ proc run_process {} {
 
    set_process_props
    #
-   # Remove the comment characters (#'s) to enable the following commands 
+   # Remove the comment characters (#'s) to enable the following commands
    # process run "Synthesize"
    # process run "Translate"
    # process run "Map"
@@ -52,7 +52,7 @@ proc rebuild_project {} {
    set proj_exts [ list ise xise gise ]
    foreach ext $proj_exts {
       set proj_name "${myProject}.$ext"
-      if { [ file exists $proj_name ] } { 
+      if { [ file exists $proj_name ] } {
          file delete $proj_name
       }
    }
@@ -108,7 +108,7 @@ proc open_project {} {
    global myScript
    global myProject
 
-   if { ! [ file exists ${myProject}.xise ] } { 
+   if { ! [ file exists ${myProject}.xise ] } {
       ## project file isn't there, rebuild it.
       puts "Project $myProject not found. Use project_rebuild to recreate it."
       return false
@@ -138,8 +138,6 @@ proc set_project_props {} {
    project set synthesis_tool "XST (VHDL/Verilog)"
    project set simulator "ISim (VHDL/Verilog)"
    project set "Preferred Language" "VHDL"
-   project set "Enable Message Filtering" "false"
-
 }
 
 
@@ -170,23 +168,24 @@ proc add_source_files {} {
    }
 
    source [ findRtfPath "data/projnav/scripts/dpm_cgUtils.tcl" ]
-   if { ! [ file exists "ipcore_dir/ClockMan.vhd" ] } {
-       puts "$myScript: Regenerating ClockMan"
+
+   {{#ipcores}}
+   if { ! [ file exists "ipcore_dir/{{name}}.vhd" ] } {
+       puts "$myScript: Regenerating {{name}}"
        cd ipcore_dir
-       run_cg_regen "ClockMan" xc6slx9-2tqg144 VHDL CURRENT
+       run_cg_regen "{{name}}" xc6slx9-2tqg144 VHDL CURRENT
        cd ..
    }
-   
+   {{/ipcores}}
+
    puts "$myScript: Adding sources to project..."
 
-   xfile add "gensrc/MainBoard.vhdl"
-   xfile add "gensrc/Video.vhdl"
-   xfile add "gensrc/lava-prelude.vhdl"
-   xfile add "ipcore_dir/ClockMan.xco"
-   xfile add "src/DualRAM.vhdl"
-   xfile add "src/PET.ucf"
-   xfile add "src/PET.vhdl"
-   xfile add "src/ToggleSync.vhdl"
+   {{#srcs}}xfile add "src/{{name}}"
+   {{/srcs}}
+   {{#gensrcs}}xfile add "gensrc/{{name}}.vhdl"
+   {{/gensrcs}}
+   {{#ipcores}}xfile add "ipcore_dir/{{name}}.xco"
+   {{/ipcores}}
 
    # Set the Top Module as well...
    project set top "rtl" "PET"
@@ -256,4 +255,3 @@ if { $tcl_interactive } {
       puts "$myScript failed: $result."
    }
 }
-
