@@ -13,7 +13,7 @@ extra-source-files:  README.md
 cabal-version:       >=1.10
 
 library
-  hs-source-dirs:      src
+  hs-source-dirs:      lava
   exposed-modules:
         EightBit.PET.Board
         EightBit.PET.Video
@@ -38,7 +38,7 @@ library
 
 
 executable eightbit-pet
-  hs-source-dirs:      src
+  hs-source-dirs:      lava
   main-is:             EightBit/PET/Build.hs
   other-modules:
         EightBit.PET.Utils
