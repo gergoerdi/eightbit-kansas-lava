@@ -2,8 +2,6 @@
 {-# LANGUAGE RecordWildCards #-}
 module Main where
 
--- import Development.KansasLava.Shake
--- import Development.KansasLava.Shake.Xilinx
 import Development.Shake
 import Development.Shake.FilePath
 import System.Directory
@@ -24,34 +22,6 @@ import Language.Netlist.GenVHDL
 import Hardware.KansasLava.Boards.Papilio.Arcade (Model(..))
 import EightBit.PET.Video (synthesize)
 import qualified EightBit.PET.Machine as Machine
-
-data Flag = ImageFile FilePath
-          | XilinxRoot FilePath
-          | PapilioModel String
-
--- mkXilinxConfig :: [Flag] -> IO (XilinxConfig, Model)
--- mkXilinxConfig flags = do
---     xilinxRoot <- case [path | XilinxRoot path <- flags] of
---         [] -> return "/home/cactus/prog/fpga/Xilinx/14.2/ISE_DS/ISE/bin/lin64"
---         [path] -> return path
---         _ -> do
---             putStrLn "Conflicting flags: --xilinx"
---             exitFailure
-
---     (xilinxPlatform, papilioModel) <- do
---         model <- case [model | PapilioModel model <- flags] of
---             [] -> do
---                 putStrLn "Defaulting to Papilio Pro"
---                 return "pro"
---             [model] -> return model
---             _ -> do
---                 putStrLn "Conflicting flags: --papilio"
---                 exitFailure
---         return $ case map toLower model of
---             "one" -> ("XC3S500E-VQ100-5", PapilioOne)
---             "pro" -> ("XC6SLX9-TQG144-2", PapilioPro)
-
---     return (XilinxConfig{..}, papilioModel)
 
 loadKernal :: FilePath -> IO ByteString
 loadKernal fileName = do
@@ -76,6 +46,7 @@ main = do
 
     shakeArgs shakeOptions{ shakeFiles = "build/.shake" } $ do
         want [ "build" </> projName <.> "bit" ]
+        -- want [ "build" </> projName <.> "tcl" ]
 
         "build" </> projName <.> "bit" %> \out -> do
             need . concat $ [ [ "build" </> "gensrc" </> modName <.> "vhdl" | (modName, _) <- genVHDLs ]
@@ -104,26 +75,6 @@ main = do
         "build" </> "ipcore_dir//*.xco" %> copy
         "build" </> "src//*" %> copy
         "build" </> "*.tcl" %> copy
-
-    -- createDirectoryIfMissing True "ise"
-    -- setCurrentDirectory "ise"
-    -- writeFileChanged ("gensrc" </> modName <.> "vhdl") vhdl
-
-
-
-  --   shakeArgsWith shakeOptions flags $ \flags targets -> do
-  --       (xilinxConfig, model) <- mkXilinxConfig flags
-
-  --       (vhdl, ucf, xaws) <- synthesize model modName (Machine.machine font kernal)
-  --       return $ Just $ do
-  --           want $ if null targets then [modName <.> "bit"] else targets
-
-  --           lavaRules modName vhdl ucf
-  --           xilinxRules xilinxConfig modName xaws
-  -- where
-  --   flags = [ Option [] ["xilinx"] (ReqArg (Right . XilinxRoot) "path") "Path to Xilinx toolchain"
-  --           , Option [] ["papilio"] (ReqArg (Right . PapilioModel) "model") "Target Papilio model (One/Pro)"
-  --           ]
   where
     projName = "PET"
     xilinx tool args = cmd (Cwd "build") (xilinxRoot </> tool) args
