@@ -1,12 +1,10 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 module Main where
-
-import EightBit.PET.Build.Shake
 
 import Development.Shake
 import Development.Shake.FilePath
 
-import Data.Word (Word8)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import Data.Monoid
@@ -15,6 +13,8 @@ import Control.Monad
 import Language.KansasLava
 import Language.KansasLava.VHDL
 import Language.Netlist.GenVHDL
+import Development.KansasLava.Shake
+import Development.KansasLava.Shake.Xilinx
 
 import qualified EightBit.PET.Machine as Machine
 
@@ -43,7 +43,26 @@ main = do
         want [ "build" </> projName <.> "bit" ]
         -- want [ "build" </> projName <.> "tcl" ]
 
-        xilinxRules projName xilinxRoot genVHDLs srcs ipcores
+        let allSrcs = concat [ [ "gensrc" </> "lava-prelude.vhdl" ]
+                             , [ "gensrc" </> modName <.> "vhdl" | (modName, _) <- genVHDLs ]
+                             , [ "src" </> src | src <- srcs ]
+                             ]
+
+        lavaRules "build" genVHDLs
+        xilinxRules XilinxConfig{..} "build" projName allSrcs ipcores
+
+        let copy out = do
+                alwaysRerun
+                copyFileChanged ("ise" </> dropDirectory1 out) out
+
+        "build" </> "ipcore_dir//*.xco" %> copy
+        "build" </> "src//*" %> copy
+
   where
     projName = "PET"
     xilinxRoot = "/home/cactus/prog/fpga/Xilinx/14.2/ISE_DS/ISE/bin/lin64"
+    xilinxTarget = XilinxTarget{ targetFamily = "Spartan6"
+                               , targetDevice = "xc6slx9"
+                               , targetSpeed = "-2"
+                               , targetPackage = "tqg144"
+                               }

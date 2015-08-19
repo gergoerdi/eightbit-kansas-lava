@@ -53,14 +53,11 @@ executable eightbit-pet
         kansas-lava >=0.2.4 && < 0.2.5,
         netlist-to-vhdl >=0.3 && <0.4,
         kansas-lava-papilio >= 0.3 && < 0.4,
-        kansas-lava-shake >= 0.1.1 && < 0.2,
+        kansas-lava-shake >= 0.2 && < 0.3,
         mos6502-kansas-lava == 0.0.0.0,
-        hastache,
-        text,
         shake,
         sized-types >=0.3,
-        bytestring,
-        directory
+        bytestring
   default-language:    Haskell2010
   other-extensions:    ScopedTypeVariables, RecordWildCards, FlexibleInstances, TypeFamilies, NoMonomorphismRestriction
   Ghc-Options:         
