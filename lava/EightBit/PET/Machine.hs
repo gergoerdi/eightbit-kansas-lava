@@ -27,7 +27,7 @@ injectKeyboard :: (Clock clk)
                -> Signal clk (Enabled (Bool, U8))
                -> Signal clk (Enabled (Bool, U8))
 injectKeyboard keys next s = runRTL $ do
-    wait <- newReg (0 :: X20)
+    wait <- newReg (0 :: X10)
     let finishedWaiting = reg wait .==. pureS maxBound
     WHEN (bitNot finishedWaiting .&&. next) $ do
         wait := reg wait + 1
@@ -55,12 +55,13 @@ machine fontImage kernalImage = (main, video)
 
         (ps2A, _) <- ps2
         let realKeyboardEvent = eventPS2 . decodePS2 . samplePS2 $ ps2A
+        -- let realKeyboardEvent = disabledS
 
         vblank <- inStdLogic "VBLANK"
         vRead <- inStdLogicVector "VRAM_DOUT"
         let (keyboardRowSel, (vAddr, vWrite), (CPUIn{..}, CPUOut{..}, CPUDebug{..})) =
                   board kernalImage vblank keyboardRow vRead
-            keyboardEvent = injectKeyboard initialInput vblank realKeyboardEvent
+            keyboardEvent = const realKeyboardEvent $ injectKeyboard initialInput vblank realKeyboardEvent
             KeyboardOut{..} = keyboard KeyboardIn{..}
 
         -- Debug output
