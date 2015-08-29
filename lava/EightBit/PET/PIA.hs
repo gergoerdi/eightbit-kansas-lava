@@ -42,8 +42,9 @@ pia PIAIn{..} = runRTL $ do
             let rise1 = risingEdge trigger1
                 fall1 = fallingEdge trigger1
             let watchRise1 = reg ctrlLo `testABit` 1
+                signal1 = mux watchRise1 (fall1, rise1)
 
-            WHEN ((watchRise1 .&&. rise1) .||. (bitNot watchRise1 .&&. fall1)) $ do
+            WHEN signal1 $ do
                 irq1 := high
 
             WHEN cs . CASE $
