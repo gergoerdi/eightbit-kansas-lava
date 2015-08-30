@@ -35,7 +35,14 @@ data VIAOut clk = VIAOut{ viaR :: Signal clk Byte
 
 via :: forall clk. (Clock clk) => VIAIn clk -> VIAOut clk
 via VIAIn{..} = runRTL $ do
-    acr <- newReg (0 :: U8)
+    pcr <- newReg 0
+    WHEN (cs .&&. isPCR .&&. we) $
+      pcr := written
+
+    acr <- newReg 0
+    WHEN (cs .&&. isACR .&&. we) $
+      acr := written
+
     let [_acr0, _acr1, acr2, acr3, acr4, _acr5, _acr6, _acr7] =
             Matrix.toList (unpackMatrix $ bitwise (reg acr) :: Matrix X8 (Signal clk Bool))
 
@@ -56,10 +63,12 @@ via VIAIn{..} = runRTL $ do
                ]
     (irq, intR) <- component isInterruptor $ interruptor ints
 
-    let viaR = muxN [ (isTimer1, timer1R)
-                    , (isTimer2, timer2R)
+    let viaR = muxN [ (isTimer1,      timer1R)
+                    , (isTimer2,      timer2R)
                     , (isInterruptor, intR)
-                    , (isShifter, shiftR)
+                    , (isShifter,     shiftR)
+                    , (isACR,         reg acr)
+                    , (isPCR,         reg pcr)
                     ]
         viaIRQ = bitNot irq
         viaOutputA = undefined
@@ -77,7 +86,7 @@ via VIAIn{..} = runRTL $ do
     component sel mkPart = mkPart (packEnabled (cs .&&. sel) (unsigned addr)) viaW
 
     (cs, addr) = unpackEnabled viaA
-    (_we, _written) = unpackEnabled viaW
+    (we, written) = unpackEnabled viaW
 
     (_ca1In, _ca2In, _paIn) = unpack viaInputA
     (cb1In, cb2In, _pbIn) = unpack viaInputB
@@ -92,3 +101,6 @@ via VIAIn{..} = runRTL $ do
     isIER = addr .==. [b|1110|]
     isIFR = addr .==. [b|1101|]
     isInterruptor = isIER .||. isIFR
+
+    isACR = addr .==. [b|1011|]
+    isPCR = addr .==. [b|1100|]
