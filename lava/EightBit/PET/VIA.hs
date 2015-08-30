@@ -1,5 +1,5 @@
 {-# LANGUAGE RecordWildCards, ViewPatterns #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ScopedTypeVariables, TypeFamilies #-}
 {-# LANGUAGE QuasiQuotes, TemplateHaskell #-}
 module EightBit.PET.VIA where
 
@@ -21,31 +21,59 @@ import Data.Traversable (sequence)
 
 data VIAIn clk = VIAIn{ viaA :: Signal clk (Enabled U4)
                       , viaW :: Signal clk (Enabled Byte)
-                      , viaInputA, viaInputB :: Signal clk (U2, Byte)
+                      , viaInputA, viaInputB :: Signal clk (Bool, Bool, Byte)
                       }
                deriving Show
 
 data VIAOut clk = VIAOut{ viaR :: Signal clk Byte
                         , viaIRQ :: Signal clk ActiveLow
-                        , viaOutputA, viaOutputB :: Signal clk (U2, Byte)
+                        , viaOutputA :: Signal clk (Bool, Byte)
+                        , viaOutputB :: Signal clk (Bool, Bool, Byte)
                         }
                 deriving Show
 
+data ShiftMode = SRFree
+               | SRTimer2
+               | SRClock
+               | SRExternal
+               deriving (Eq, Ord, Show, Enum, Bounded)
+$(repBitRep ''ShiftMode 2); instance BitRep ShiftMode where bitRep = bitRepEnum
+
 via :: forall clk. (Clock clk) => VIAIn clk -> VIAOut clk
 via VIAIn{..} = runRTL $ do
-    (timer1Int, _trigger1, timer1R) <- component isTimer1 $ timer1 low
-    (timer2Int, _trigger2, timer2R) <- component isTimer2 $ timer2 high
+    acr <- newReg (0 :: U8)
+    let [_acr0, _acr1, acr2, acr3, acr4, _acr5, _acr6, _acr7] =
+            Matrix.toList (unpackMatrix $ bitwise (reg acr) :: Matrix X8 (Signal clk Bool))
 
-    let ints = Matrix.fromList [ undefined, undefined, undefined, undefined, undefined, timer2Int, timer1Int ]
+    let acr432 = bitwise $ packMatrix (Matrix.fromList [acr2, acr3, acr4] :: Matrix X3 (Signal clk Bool))
+
+    (timer1Int, _trigger1, _, timer1R) <- component isTimer1 $ timer1 low
+    (timer2Int, _trigger2, timerLo2, timer2R) <- component isTimer2 $ timer2 high
+    (shiftInt, _shiftOut, _shiftClk, shiftR) <- component isShifter $ shifter acr432 cb2In cb1In timerLo2
+
+    let ints = Matrix.fromList
+               [ undefined
+               , undefined
+               , shiftInt
+               , undefined
+               , undefined
+               , timer2Int
+               , timer1Int
+               ]
     (irq, intR) <- component isInterruptor $ interruptor ints
 
     let viaR = muxN [ (isTimer1, timer1R)
                     , (isTimer2, timer2R)
                     , (isInterruptor, intR)
+                    , (isShifter, shiftR)
                     ]
         viaIRQ = bitNot irq
         viaOutputA = undefined
-        viaOutputB = undefined
+
+        cb1Out = undefined
+        cb2Out = undefined
+        pbOut = undefined
+        viaOutputB = pack (cb1Out, cb2Out, pbOut)
     return VIAOut{..}
   where
     component :: (Rep a, Num a)
@@ -57,10 +85,15 @@ via VIAIn{..} = runRTL $ do
     (cs, addr) = unpackEnabled viaA
     (_we, _written) = unpackEnabled viaW
 
+    (_ca1In, _ca2In, _paIn) = unpack viaInputA
+    (cb1In, cb2In, _pbIn) = unpack viaInputB
+
     [_rs0, rs1, rs2, rs3] = Matrix.toList . unpackMatrix $ bitwise addr
 
     isTimer1 = foldr1 (.&&.) $ zipWith (.==.) [rs3, rs2] [low, high]
     isTimer2 = foldr1 (.&&.) $ zipWith (.==.) [rs3, rs2, rs1] [high, low, low]
+
+    isShifter = addr .==. [b|1010|]
 
     isIER = addr .==. [b|1110|]
     isIFR = addr .==. [b|1101|]
@@ -98,7 +131,7 @@ timer :: forall clk s. (Clock clk)
       -> Signal clk Bool
       -> Signal clk (Enabled U2)
       -> Signal clk (Enabled Byte)
-      -> RTL s clk (Reg s clk Bool, Signal clk Bool, Signal clk Byte)
+      -> RTL s clk (Reg s clk Bool, Signal clk Bool, Signal clk Bool, Signal clk Byte)
 timer countee freeRun a w = do
     latchLo <- newReg 0
     latchHi <- newReg 0
@@ -134,7 +167,7 @@ timer countee freeRun a w = do
                             , (0x3, reg latchHi)
                             ]
 
-    return (int, triggered, read)
+    return (int, triggered, counterLo .==. 0, read)
   where
     (cs, addr) = unpackEnabled a
     (we, written) = unpackEnabled w
@@ -143,12 +176,12 @@ timer1 :: forall clk s. (Clock clk)
        => Signal clk Bool
        -> Signal clk (Enabled U2)
        -> Signal clk (Enabled Byte)
-       -> RTL s clk (Reg s clk Bool, Signal clk Bool, Signal clk Byte)
+       -> RTL s clk (Reg s clk Bool, Signal clk Bool, Signal clk Bool, Signal clk Byte)
 timer1 = timer high
 
 timer1Test :: Seq (Bool, Bool)
 timer1Test = runRTL $ do
-    (int, triggered, _) <- timer1 high a w
+    (int, triggered, _, _) <- timer1 high a w
     return $ pack (triggered, var int)
   where
     pipe = [Just (0x0, 0x0A), Just (0x1, 0x00)] ++ replicate 30 Nothing
@@ -159,12 +192,12 @@ timer2 :: forall clk s. (Clock clk)
        => Signal clk Bool
        -> Signal clk (Enabled U1)
        -> Signal clk (Enabled Byte)
-       -> RTL s clk (Reg s clk Bool, Signal clk Bool, Signal clk Byte)
+       -> RTL s clk (Reg s clk Bool, Signal clk Bool, Signal clk Bool, Signal clk Byte)
 timer2 countee a = timer countee low (mapEnabled unsigned a)
 
 timer2Test :: Seq (Bool, Bool, Bool)
 timer2Test = runRTL $ do
-    (int, triggered, _) <- timer2 countee a w
+    (int, triggered, _, _) <- timer2 countee a w
     return $ pack (triggered, var int, countee)
   where
     pipe = [Just (0x0, 3), Just (0x1, 0)] ++ replicate 30 Nothing
@@ -172,6 +205,48 @@ timer2Test = runRTL $ do
     w = toS $ map (fmap snd) pipe
 
     countee = toS $ replicate 3 True ++ replicate 4 False ++ cycle (True : replicate 3 False)
+
+shifter :: forall clk s. (Clock clk)
+        => Signal clk U3
+        -> Signal clk Bool
+        -> Signal clk Bool
+        -> Signal clk Bool
+        -> Signal clk (Enabled (Unsigned X0))
+        -> Signal clk (Enabled U8)
+        -> RTL s clk (Reg s clk Bool, Signal clk Bool, Signal clk Bool, Signal clk Byte)
+shifter acr432 input clkTimer clkExternal a w = do
+    sr <- newReg 0
+    counter <- newReg (0 :: W U8)
+    int <- newReg False
+    let triggered = var counter .==. 0 .&&. reg counter ./=. 0
+
+    let clk = switchS mode [ (SRFree,     clkTimer)
+                           , (SRTimer2,   clkTimer)
+                           , (SRClock,    iterateS bitNot True)
+                           , (SRExternal, clkExternal)
+                           ]
+
+        -- held high unless shiftIn is active
+        clkIn = out .||. bitNot (mode .==. pureS SRFree) .||. clk
+
+        -- held high unless shiftOut is active
+        clkOut = bitNot out .||. clk
+
+    WHEN (bitNot out) $ shiftIn input sr clkIn
+    output <- shiftOut sr clkOut
+
+    WHEN cs $ do
+        -- a read or a write both restart the counter
+        counter := 0
+        CASE [ match w $ \v -> sr := v ]
+    WHEN (risingEdge clk .&&. mode ./=. pureS SRFree) $ do
+        counter := mux (reg counter .==. 0) (reg counter - 1, pureS maxBound)
+    WHEN triggered $ int := high
+
+    return (int, output, clk, var sr)
+  where
+    (cs, _) = unpackEnabled a
+    (mode, out) = unappendS acr432 :: (Signal clk ShiftMode, Signal clk Bool)
 
 shiftIn :: forall clk s. (Clock clk)
         => Signal clk Bool
