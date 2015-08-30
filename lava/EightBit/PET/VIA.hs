@@ -6,6 +6,7 @@ module EightBit.PET.VIA where
 import MOS6502.Types
 import MOS6502.Utils
 import Language.Literals.Binary
+import EightBit.PET.Utils
 
 import Language.KansasLava
 
@@ -167,3 +168,78 @@ timer2Test = runRTL $ do
     w = toS $ map (fmap snd) pipe
 
     countee = toS $ replicate 3 True ++ replicate 4 False ++ cycle (True : replicate 3 False)
+
+shiftIn :: forall clk. (Clock clk)
+        => Signal clk (Enabled (Enabled U8))
+        -> Signal clk Bool
+        -> Signal clk Bool
+        -> (Signal clk Bool, Signal clk U8)
+shiftIn cmd tick sig = runRTL $ do
+    sr <- newReg 0
+    counter <- newReg (0 :: W U8)
+
+    let (_, srHi) = unappendS (reg sr) :: (Signal clk Bool, Signal clk U7)
+        (srLo, _) = unappendS (reg sr) :: (Signal clk U7, Signal clk Bool)
+
+    let reset = do
+            counter := 0
+        load = do
+            sr := appendS sig srHi
+            counter := mux (reg counter .==. 0) (reg counter - 1, pureS maxBound)
+        shift = do
+            sr := appendS low srLo
+
+    CASE [ match cmd $ \w -> do
+                reset
+                CASE [ match w $ \v -> sr := v ]
+         , IF (risingEdge tick) load
+         , IF (fallingEdge tick) shift
+         ]
+
+    let triggered = var counter .==. 0 .&&. reg counter ./=. 0
+    return (triggered, var sr)
+
+shiftInTest :: Seq (Bool, U8)
+shiftInTest = pack (finished, read)
+  where
+    (finished, read) = shiftIn disabledS tick . toS $
+                       concatMap (replicate 2) $ False : input
+
+    tick = iterateS bitNot True
+    input = [True, True, True, False, False, False, False, True] ++ repeat False
+
+shiftOut :: forall clk. (Clock clk)
+         => Signal clk (Enabled (Enabled U8))
+         -> Signal clk Bool
+         -> (Signal clk Bool, Signal clk Bool)
+shiftOut cmd tick = runRTL $ do
+    sr <- newReg 0
+    counter <- newReg (0 :: W U8)
+
+    let (srLo, rot) = unappendS (reg sr) :: (Signal clk U7, Signal clk Bool)
+
+    let reset = do
+            counter := 0
+        count = do
+            counter := mux (reg counter .==. 0) (reg counter - 1, pureS maxBound)
+        shift = do
+            sr := appendS rot srLo
+
+    CASE [ match cmd $ \w -> do
+                reset
+                CASE [ match w $ \v -> sr := v ]
+         , IF (risingEdge tick) count
+         , IF (fallingEdge tick) shift
+         ]
+
+    let triggered = var counter .==. 0 .&&. reg counter ./=. 0
+        out = var sr `testABit` 0
+
+    return (triggered, out)
+
+shiftOutTest :: Seq (Bool, Bool, Bool)
+shiftOutTest = pack (fallingEdge tick, finished, written)
+  where
+    (finished, written) = shiftOut cmds tick
+    tick = toS $ cycle [True, True, False]
+    cmds = toS $ (Just $ Just 123) : repeat Nothing
