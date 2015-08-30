@@ -19,6 +19,9 @@ library
         EightBit.PET.Video
         EightBit.PET.PIA
         EightBit.PET.VIA
+        EightBit.PET.VIA.Shifter
+        EightBit.PET.VIA.Timer
+        EightBit.PET.VIA.Interruptor
         EightBit.PET.Keyboard
   other-modules:
         EightBit.PET.Utils
