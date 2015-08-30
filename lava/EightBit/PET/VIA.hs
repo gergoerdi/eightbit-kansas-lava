@@ -169,77 +169,75 @@ timer2Test = runRTL $ do
 
     countee = toS $ replicate 3 True ++ replicate 4 False ++ cycle (True : replicate 3 False)
 
-shiftIn :: forall clk. (Clock clk)
-        => Signal clk (Enabled (Enabled U8))
+shiftIn :: forall clk s. (Clock clk)
+        => Signal clk Bool
+        -> Reg s clk U8
         -> Signal clk Bool
-        -> Signal clk Bool
-        -> (Signal clk Bool, Signal clk U8)
-shiftIn cmd tick sig = runRTL $ do
-    sr <- newReg 0
-    counter <- newReg (0 :: W U8)
-
+        -> RTL s clk ()
+shiftIn sig sr tick = do
     let (_, srHi) = unappendS (reg sr) :: (Signal clk Bool, Signal clk U7)
         (srLo, _) = unappendS (reg sr) :: (Signal clk U7, Signal clk Bool)
 
-    let reset = do
-            counter := 0
-        load = do
+    let load = do
             sr := appendS sig srHi
-            counter := mux (reg counter .==. 0) (reg counter - 1, pureS maxBound)
         shift = do
             sr := appendS low srLo
 
-    CASE [ match cmd $ \w -> do
-                reset
-                CASE [ match w $ \v -> sr := v ]
-         , IF (risingEdge tick) load
+    CASE [ IF (risingEdge tick) load
          , IF (fallingEdge tick) shift
          ]
 
-    let triggered = var counter .==. 0 .&&. reg counter ./=. 0
-    return (triggered, var sr)
-
-shiftInTest :: Seq (Bool, U8)
-shiftInTest = pack (finished, read)
-  where
-    (finished, read) = shiftIn disabledS tick . toS $
-                       concatMap (replicate 2) $ False : input
-
-    tick = iterateS bitNot True
-    input = [True, True, True, False, False, False, False, True] ++ repeat False
-
-shiftOut :: forall clk. (Clock clk)
-         => Signal clk (Enabled (Enabled U8))
-         -> Signal clk Bool
-         -> (Signal clk Bool, Signal clk Bool)
-shiftOut cmd tick = runRTL $ do
+shiftTest :: forall a clk s. (Clock clk)
+          => Signal clk (Enabled (Enabled U8))
+          -> Signal clk Bool
+          -> (Reg s clk U8 -> Signal clk Bool -> RTL s clk a)
+          -> RTL s clk (Signal clk Bool, Signal clk U8, a)
+shiftTest cmd tick mkShifter = do
     sr <- newReg 0
     counter <- newReg (0 :: W U8)
-
-    let (srLo, rot) = unappendS (reg sr) :: (Signal clk U7, Signal clk Bool)
-
     let reset = do
             counter := 0
         count = do
             counter := mux (reg counter .==. 0) (reg counter - 1, pureS maxBound)
-        shift = do
-            sr := appendS rot srLo
+        triggered = var counter .==. 0 .&&. reg counter ./=. 0
 
     CASE [ match cmd $ \w -> do
                 reset
                 CASE [ match w $ \v -> sr := v ]
          , IF (risingEdge tick) count
-         , IF (fallingEdge tick) shift
          ]
 
-    let triggered = var counter .==. 0 .&&. reg counter ./=. 0
-        out = var sr `testABit` 0
+    res <- mkShifter sr tick
+    return (triggered, var sr, res)
 
-    return (triggered, out)
+shiftInTest :: Seq (Bool, U8)
+shiftInTest = runRTL $ do
+    (finished, read, ()) <- shiftTest disabledS tick $ shiftIn sig
+    return $ pack (finished, read)
+  where
+    tick = iterateS bitNot True
+    input = [True, True, True, False, False, False, False, True] ++ repeat False
+    sig = toS . concatMap (replicate 2) $ False : input
+
+shiftOut :: forall clk s. (Clock clk)
+         => Reg s clk U8
+         -> Signal clk Bool
+         -> RTL s clk (Signal clk Bool)
+shiftOut sr tick = do
+    let (srLo, rot) = unappendS (reg sr) :: (Signal clk U7, Signal clk Bool)
+
+    let shift = do
+            sr := appendS rot srLo
+
+    WHEN (fallingEdge tick) shift
+
+    let out = var sr `testABit` 0
+    return out
 
 shiftOutTest :: Seq (Bool, Bool, Bool)
-shiftOutTest = pack (fallingEdge tick, finished, written)
+shiftOutTest = runRTL $ do
+    (finished, _, written) <- shiftTest cmds tick shiftOut
+    return $ pack (fallingEdge tick, finished, written)
   where
-    (finished, written) = shiftOut cmds tick
     tick = toS $ cycle [True, True, False]
     cmds = toS $ (Just $ Just 123) : repeat Nothing
