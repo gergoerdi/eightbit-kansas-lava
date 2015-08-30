@@ -48,6 +48,10 @@ via VIAIn{..} = runRTL $ do
         viaOutputB = undefined
     return VIAOut{..}
   where
+    component :: (Rep a, Num a)
+              => Signal clk Bool
+              -> (Signal clk (Enabled a) -> Signal clk (Enabled U8) -> RTL s clk r)
+              -> RTL s clk r
     component sel mkPart = mkPart (packEnabled (cs .&&. sel) (unsigned addr)) viaW
 
     (cs, addr) = unpackEnabled viaA
