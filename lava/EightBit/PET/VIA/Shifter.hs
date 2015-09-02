@@ -19,14 +19,15 @@ data ShiftMode = SRFree
 $(repBitRep ''ShiftMode 2); instance BitRep ShiftMode where bitRep = bitRepEnum
 
 shifter :: forall clk s. (Clock clk)
-        => Signal clk U3
+        => Signal clk Bool
+        -> Signal clk ShiftMode
         -> Signal clk Bool
         -> Signal clk Bool
         -> Signal clk Bool
         -> Signal clk (Enabled (Unsigned X0))
         -> Signal clk (Enabled U8)
         -> RTL s clk (Reg s clk Bool, Signal clk Bool, Signal clk Bool, Signal clk Byte)
-shifter acr432 input clkTimer clkExternal a w = do
+shifter out mode input clkTimer clkExternal a w = do
     sr <- newReg 0
     counter <- newReg (0 :: W U8)
     int <- newReg False
@@ -58,7 +59,6 @@ shifter acr432 input clkTimer clkExternal a w = do
     return (int, output, clk, var sr)
   where
     (cs, _) = unpackEnabled a
-    (mode, out) = unappendS acr432 :: (Signal clk ShiftMode, Signal clk Bool)
 
 shiftIn :: forall clk s. (Clock clk)
         => Signal clk Bool

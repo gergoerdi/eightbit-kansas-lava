@@ -47,11 +47,11 @@ via VIAIn{..} = runRTL $ do
     let [_acr0, _acr1, acr2, acr3, acr4, _acr5, _acr6, _acr7] =
             Matrix.toList $ unbus $ reg acr
 
-    let acr432 = bus $ Matrix.fromList [acr2, acr3, acr4]
+    let shiftMode = bitwise $ bus $ Matrix.fromList [acr2, acr3]
 
     (timer1Int, _trigger1, _, timer1R) <- component isTimer1 $ timer1 low
     (timer2Int, _trigger2, timerLo2, timer2R) <- component isTimer2 $ timer2 high
-    (shiftInt, _shiftOut, _shiftClk, shiftR) <- component isShifter $ shifter acr432 cb2In cb1In timerLo2
+    (shiftInt, _shiftOut, _shiftClk, shiftR) <- component isShifter $ shifter acr4 shiftMode cb2In cb1In timerLo2
 
     let ints = Matrix.fromList
                [ undefined
