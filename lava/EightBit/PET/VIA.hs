@@ -9,6 +9,7 @@ import EightBit.PET.VIA.Interruptor
 
 import MOS6502.Types
 import MOS6502.Utils
+import EightBit.PET.Utils
 import Language.Literals.Binary
 
 import Language.KansasLava
@@ -44,9 +45,9 @@ via VIAIn{..} = runRTL $ do
       acr := written
 
     let [_acr0, _acr1, acr2, acr3, acr4, _acr5, _acr6, _acr7] =
-            Matrix.toList (unpackMatrix $ bitwise (reg acr) :: Matrix X8 (Signal clk Bool))
+            Matrix.toList $ unbus $ reg acr
 
-    let acr432 = bitwise $ packMatrix (Matrix.fromList [acr2, acr3, acr4] :: Matrix X3 (Signal clk Bool))
+    let acr432 = bus $ Matrix.fromList [acr2, acr3, acr4]
 
     (timer1Int, _trigger1, _, timer1R) <- component isTimer1 $ timer1 low
     (timer2Int, _trigger2, timerLo2, timer2R) <- component isTimer2 $ timer2 high
@@ -91,7 +92,7 @@ via VIAIn{..} = runRTL $ do
     (_ca1In, _ca2In, _paIn) = unpack viaInputA
     (cb1In, cb2In, _pbIn) = unpack viaInputB
 
-    [_rs0, rs1, rs2, rs3] = Matrix.toList . unpackMatrix $ bitwise addr
+    [_rs0, rs1, rs2, rs3] = Matrix.toList $ unbus addr
 
     isTimer1 = foldr1 (.&&.) $ zipWith (.==.) [rs3, rs2] [low, high]
     isTimer2 = foldr1 (.&&.) $ zipWith (.==.) [rs3, rs2, rs1] [high, low, low]
