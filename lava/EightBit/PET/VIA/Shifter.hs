@@ -26,7 +26,7 @@ shifter :: forall clk s. (Clock clk)
         -> Signal clk Bool
         -> Signal clk (Enabled (Unsigned X0))
         -> Signal clk (Enabled U8)
-        -> RTL s clk (Reg s clk Bool, Signal clk Bool, Signal clk Bool, Signal clk Byte)
+        -> RTL s clk (Reg s clk Bool, Signal clk (Enabled Bool), Signal clk (Enabled Bool), Signal clk Byte)
 shifter out mode input clkTimer clkExternal a w = do
     sr <- newReg 0
     counter <- newReg (0 :: W U8)
@@ -38,6 +38,8 @@ shifter out mode input clkTimer clkExternal a w = do
                            , (SRClock,    iterateS bitNot True)
                            , (SRExternal, clkExternal)
                            ]
+        driveClk = (bitNot out .&&. (mode `elemS` [SRTimer2, SRClock])) .||.
+                   (out .&&. (mode `elemS` [SRFree, SRTimer2, SRClock]))
 
         -- held high unless shiftIn is active
         clkIn = out .||. bitNot (mode .==. pureS SRFree) .||. clk
@@ -56,7 +58,7 @@ shifter out mode input clkTimer clkExternal a w = do
         counter := mux (reg counter .==. 0) (reg counter - 1, pureS maxBound)
     WHEN triggered $ int := high
 
-    return (int, output, clk, var sr)
+    return (int, packEnabled out output, packEnabled driveClk clk, var sr)
   where
     (cs, _) = unpackEnabled a
 

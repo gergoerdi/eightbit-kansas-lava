@@ -6,6 +6,7 @@ module EightBit.PET.VIA where
 import EightBit.PET.VIA.Timer
 import EightBit.PET.VIA.Shifter
 import EightBit.PET.VIA.Interruptor
+import EightBit.PET.VIA.Port
 
 import MOS6502.Types
 import MOS6502.Utils
@@ -29,8 +30,8 @@ data VIAIn clk = VIAIn{ viaA :: Signal clk (Enabled U4)
 
 data VIAOut clk = VIAOut{ viaR :: Signal clk Byte
                         , viaIRQ :: Signal clk ActiveLow
-                        , viaOutputA :: Signal clk (Bool, Byte)
-                        , viaOutputB :: Signal clk (Bool, Bool, Byte)
+                        , viaOutputA :: (Signal clk (Enabled Bool), Matrix X8 (Signal clk (Enabled Bool)))
+                        , viaOutputB :: (Signal clk (Enabled Bool), Signal clk (Enabled Bool), Matrix X8 (Signal clk (Enabled Bool)))
                         }
                 deriving Show
 
@@ -39,32 +40,56 @@ via VIAIn{..} = runRTL $ do
     pcr <- newReg 0
     WHEN (cs .&&. isPCR .&&. we) $
       pcr := written
+    let [ca1c, pcr1, pcr2, pcr3, cb1c, pcr5, pcr6, pcr7] =
+            Matrix.toList . unbus $ reg pcr
+        ca2c = bitwise $ bus . Matrix.fromList $ [pcr1, pcr2, pcr3]
+        cb2c = bitwise $ bus . Matrix.fromList $ [pcr5, pcr6, pcr7]
 
     acr <- newReg 0
     WHEN (cs .&&. isACR .&&. we) $
       acr := written
 
-    let [_acr0, _acr1, acr2, acr3, acr4, _acr5, _acr6, _acr7] =
-            Matrix.toList $ unbus $ reg acr
-
-    let shiftMode = bitwise $ bus $ Matrix.fromList [acr2, acr3]
+    let [latchA, latchB, acr2, acr3, shiftOut, _acr5, _acr6, _acr7] =
+            Matrix.toList . unbus $ reg acr
+        shiftMode = bitwise $ bus . Matrix.fromList $ [acr2, acr3]
+        -- _timer1Mode = bitwise $ bus $ Matrix.fromList [acr6, acr7]
+        -- _timer2Mode = acr5
 
     (timer1Int, _trigger1, _, timer1R) <- component isTimer1 $ timer1 low
     (timer2Int, _trigger2, timerLo2, timer2R) <- component isTimer2 $ timer2 high
-    (shiftInt, _shiftOut, _shiftClk, shiftR) <- component isShifter $ shifter acr4 shiftMode cb2In cb1In timerLo2
+    (shiftInt, shiftOut, shiftClk, shiftR) <- component isShifter $ shifter shiftOut shiftMode cb2In cb1In timerLo2
+
+    let isPortA = isDDRA .||. isORA .||. isORA'
+    let portAAddr = packEnabled (cs .&&. isPortA) $
+                    muxN [ (isDDRA, pureS DDR)
+                         , (isORA, pureS PerifReset)
+                         , (isORA', pureS Perif)
+                         ]
+    ((ca1Int, _ca1Trigger), (ca2Int, _ca2Trigger), paOut, paR) <-
+        port latchA ca1c ca2c viaInputA portAAddr viaW
+
+    let isPortB = isDDRB .||. isORB
+    let portBAddr = packEnabled (cs .&&. isPortB) $
+                    muxN [ (isDDRB, pureS DDR)
+                         , (isORB, pureS PerifReset)
+                         ]
+    ((cb1Int, _cb1Trigger), (cb2Int, _cb2Trigger), pbOut, pbR) <-
+        port latchB cb1c cb2c viaInputB portBAddr viaW
 
     let ints = Matrix.fromList
-               [ undefined
-               , undefined
+               [ ca2Int
+               , ca1Int
                , shiftInt
-               , undefined
-               , undefined
+               , cb2Int
+               , cb1Int
                , timer2Int
                , timer1Int
                ]
     (irq, intR) <- component isInterruptor $ interruptor ints
 
-    let viaR = muxN [ (isTimer1,      timer1R)
+    let viaR = muxN [ (isPortA,       paR)
+                    , (isPortB,       pbR)
+                    , (isTimer1,      timer1R)
                     , (isTimer2,      timer2R)
                     , (isInterruptor, intR)
                     , (isShifter,     shiftR)
@@ -72,12 +97,12 @@ via VIAIn{..} = runRTL $ do
                     , (isPCR,         reg pcr)
                     ]
         viaIRQ = bitNot irq
-        viaOutputA = undefined
 
-        cb1Out = undefined
-        cb2Out = undefined
-        pbOut = undefined
-        viaOutputB = pack (cb1Out, cb2Out, pbOut)
+        ca2Out = undefined
+        cb1Out = shiftClk -- TODO: or handshake...
+        cb2Out = shiftOut -- TODO: or handshake...
+        viaOutputA = (ca2Out, paOut)
+        viaOutputB = (cb1Out, cb2Out, pbOut)
     return VIAOut{..}
   where
     component :: (Rep a, Num a)
@@ -94,8 +119,15 @@ via VIAIn{..} = runRTL $ do
 
     [_rs0, rs1, rs2, rs3] = Matrix.toList $ unbus addr
 
-    isTimer1 = foldr1 (.&&.) $ zipWith (.==.) [rs3, rs2] [low, high]
-    isTimer2 = foldr1 (.&&.) $ zipWith (.==.) [rs3, rs2, rs1] [high, low, low]
+    isORA  = addr .==. [b|0001|]
+    isORA' = addr .==. [b|1111|]
+    isDDRA = addr .==. [b|0011|]
+
+    isORB  = addr .==. [b|0000|]
+    isDDRB = addr .==. [b|0010|]
+
+    isTimer1 = bus (Matrix.fromList [rs2, rs3]) .==. pureS ([b|01|] :: U2)
+    isTimer2 = bus (Matrix.fromList [rs1, rs2, rs3]) .==. pureS ([b|100|] :: U2)
 
     isShifter = addr .==. [b|1010|]
 
