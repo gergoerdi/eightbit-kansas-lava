@@ -22,8 +22,8 @@ interruptor :: forall clk s. (Clock clk)
             -> RTL s clk (Signal clk Bool, Signal clk Byte)
 interruptor ints a w = do
     ier <- newReg (0 :: U7)
-    let ifr0 = bitwise . packMatrix $ fmap reg ints
-        irq = (ifr0 .&. reg ier) ./=. 0
+    let ifr0 = bitwise . packMatrix $ fmap var ints
+        irq = (ifr0 .&. var ier) ./=. 0
         ifr = appendS ifr0 irq
 
     WHEN cs $

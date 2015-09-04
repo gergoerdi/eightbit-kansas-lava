@@ -17,7 +17,7 @@ import Language.KansasLava
 
 import Data.Sized.Ix
 import Data.Sized.Unsigned
-import Data.Sized.Matrix (Matrix)
+import Data.Sized.Matrix (Matrix, (!))
 import qualified Data.Sized.Matrix as Matrix
 import Prelude hiding (foldr1)
 import Data.Foldable (foldr1)
@@ -49,20 +49,21 @@ via VIAIn{..} = runRTL $ do
     WHEN (cs .&&. isACR .&&. we) $
       acr := written
 
-    let [latchA, latchB, acr2, acr3, shiftOut, _acr5, _acr6, _acr7] =
+    let [latchA, latchB, acr2, acr3, shiftOut, t2FromPB6, t1Free, t1Out] =
             Matrix.toList . unbus $ reg acr
         shiftMode = bitwise $ bus . Matrix.fromList $ [acr2, acr3]
-        -- _timer1Mode = bitwise $ bus $ Matrix.fromList [acr6, acr7]
         -- _timer2Mode = acr5
+        t2Source = let pb6 = pbIn `testABit` 6
+                   in mux t2FromPB6 (high, pb6)
 
-    (timer1Int, _trigger1, _, timer1R) <- component isTimer1 $ timer1 low
-    (timer2Int, _trigger2, timerLo2, timer2R) <- component isTimer2 $ timer2 high
+    (timer1Int, trigger1, _, timer1R) <- component isTimer1 $ timer1 t1Free
+    (timer2Int, _trigger2, timerLo2, timer2R) <- component isTimer2 $ timer2 t2Source
     (shiftInt, shiftOut, shiftClk, shiftR) <- component isShifter $ shifter shiftOut shiftMode cb2In cb1In timerLo2
 
     let isPortA = isDDRA .||. isORA .||. isORA'
     let portAAddr = packEnabled (cs .&&. isPortA) $
                     muxN [ (isDDRA, pureS DDR)
-                         , (isORA, pureS PerifReset)
+                         , (isORA,  pureS PerifReset)
                          , (isORA', pureS Perif)
                          ]
     ((ca1Int, _ca1Trigger), (ca2Int, _ca2Trigger), paOut, paR) <-
@@ -75,6 +76,9 @@ via VIAIn{..} = runRTL $ do
                          ]
     ((cb1Int, _cb1Trigger), (cb2Int, _cb2Trigger), pbOut, pbR) <-
         port latchB cb1c cb2c viaInputB portBAddr viaW
+
+    let pb7' = mux t1Out (pbOut ! 7, enabledS trigger1)
+        pbOut' = Matrix.fromList $ init (Matrix.toList pbOut) ++ [pb7']
 
     let ints = Matrix.fromList
                [ ca2Int
@@ -98,11 +102,11 @@ via VIAIn{..} = runRTL $ do
                     ]
         viaIRQ = bitNot irq
 
-        ca2Out = undefined
+        ca2Out = undefined -- TODO: handshake...
         cb1Out = shiftClk -- TODO: or handshake...
         cb2Out = shiftOut -- TODO: or handshake...
         viaOutputA = (ca2Out, paOut)
-        viaOutputB = (cb1Out, cb2Out, pbOut)
+        viaOutputB = (cb1Out, cb2Out, pbOut')
     return VIAOut{..}
   where
     component :: (Rep a, Num a)
@@ -115,7 +119,7 @@ via VIAIn{..} = runRTL $ do
     (we, written) = unpackEnabled viaW
 
     (_ca1In, _ca2In, _paIn) = unpack viaInputA
-    (cb1In, cb2In, _pbIn) = unpack viaInputB
+    (cb1In, cb2In, pbIn) = unpack viaInputB
 
     [_rs0, rs1, rs2, rs3] = Matrix.toList $ unbus addr
 
@@ -127,7 +131,7 @@ via VIAIn{..} = runRTL $ do
     isDDRB = addr .==. [b|0010|]
 
     isTimer1 = bus (Matrix.fromList [rs2, rs3]) .==. pureS ([b|01|] :: U2)
-    isTimer2 = bus (Matrix.fromList [rs1, rs2, rs3]) .==. pureS ([b|100|] :: U2)
+    isTimer2 = bus (Matrix.fromList [rs1, rs2, rs3]) .==. pureS ([b|100|] :: U3)
 
     isShifter = addr .==. [b|1010|]
 
