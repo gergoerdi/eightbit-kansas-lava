@@ -19,8 +19,6 @@ import Data.Sized.Ix
 import Data.Sized.Unsigned
 import Data.Sized.Matrix (Matrix, (!))
 import qualified Data.Sized.Matrix as Matrix
-import Prelude hiding (foldr1)
-import Data.Foldable (foldr1)
 
 data VIAIn clk = VIAIn{ viaA :: Signal clk (Enabled U4)
                       , viaW :: Signal clk (Enabled Byte)

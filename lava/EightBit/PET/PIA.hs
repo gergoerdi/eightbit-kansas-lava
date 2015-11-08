@@ -1,5 +1,5 @@
 {-# LANGUAGE RecordWildCards, ViewPatterns #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ScopedTypeVariables, FlexibleContexts #-}
 module EightBit.PET.PIA where
 
 import MOS6502.Types

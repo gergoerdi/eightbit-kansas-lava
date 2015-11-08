@@ -3,7 +3,6 @@
 module EightBit.PET.Keyboard where
 
 import Prelude hiding (sequence)
-import Control.Applicative ((<$>))
 import Control.Arrow (second)
 import Data.Traversable (sequence)
 
