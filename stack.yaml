@@ -1,0 +1,17 @@
+resolver: lts-5.12
+packages:
+  - '.'
+  - ../6502
+  - ../kansas-lava-papilio
+  - ../kansas-lava-shake
+extra-deps:
+  - binary-literal-qq-1.0
+  - kansas-lava-0.2.4.3
+  - kansas-lava-papilio-0.3.1
+  - kansas-lava-shake-0.2.0
+  - netlist-to-vhdl-0.3.2
+  - dotgen-0.4.2
+  - kansas-lava-cores-0.1.2.2
+  - netlist-0.3.1
+  - sized-types-0.3.5.1
+  - data-reify-0.6
