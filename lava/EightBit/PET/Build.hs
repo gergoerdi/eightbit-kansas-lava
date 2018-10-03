@@ -9,6 +9,7 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import Data.Monoid
 import Control.Monad
+import Data.Maybe (fromMaybe)
 
 import Language.KansasLava
 import Language.KansasLava.VHDL
@@ -49,7 +50,7 @@ main = do
                              ]
 
         lavaRules "build" genVHDLs
-        xilinxRules XilinxConfig{..} "build" projName allSrcs ipcores
+        xilinxRules (Just papilioPro) "build" projName allSrcs ipcores
 
         let copy out = do
                 alwaysRerun
@@ -60,9 +61,3 @@ main = do
 
   where
     projName = "PET"
-    xilinxRoot = "/home/cactus/prog/fpga/Xilinx/14.2/ISE_DS/ISE/bin/lin64"
-    xilinxTarget = XilinxTarget{ targetFamily = "Spartan6"
-                               , targetDevice = "xc6slx9"
-                               , targetSpeed = "-2"
-                               , targetPackage = "tqg144"
-                               }

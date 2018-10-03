@@ -3,3 +3,4 @@ Setup.hs
 cabal.sandbox.config
 build
 .stack-work
+build.mk
